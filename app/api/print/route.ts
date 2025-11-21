@@ -20,7 +20,7 @@ export async function POST(req: Request) {
     };
 
     const printerRes = await fetch(
-      "http://localhost:80/Integration/print/Execute",
+      "http://host.docker.internal:80/Integration/print/Execute",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },

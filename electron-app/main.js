@@ -4,34 +4,28 @@ function createWindow() {
   const win = new BrowserWindow({
     width: 1280,
     height: 800,
-    fullscreen: false,
-    kiosk: false, // → true = Touchscreen-Kiosk-Modus
-    autoHideMenuBar: true,
+    fullscreen: true,      // startet direkt fullscreen
+    kiosk: true,           // echter Kiosk-Modus (kein Alt+Tab etc.)
+    autoHideMenuBar: true, // kein Menü
+    frame: false,          // kein Fensterrahmen
+    alwaysOnTop: true,     // bleibt oben
     webPreferences: {
       nodeIntegration: false,
-    }
+      contextIsolation: true,
+    },
   });
 
-  // WICHTIG: Deine LAN- oder lokale docker-compose-Adresse
   win.loadURL("http://localhost:3000");
 
-  // Optional: Devtools deaktivieren
-  // win.webContents.openDevTools();
+  // Falls der Fokus manchmal fehlt:
+  win.once("ready-to-show", () => {
+    win.show();
+    win.focus();
+  });
 }
 
-app.whenReady().then(() => {
-  createWindow();
+app.whenReady().then(createWindow);
 
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
-    }
-  });
-});
-
-// Unter Windows App vollständig schließen
 app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
-    app.quit();
-  }
+  app.quit();
 });
