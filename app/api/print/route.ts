@@ -3,51 +3,91 @@ import fs from "fs";
 import path from "path";
 import net from "net";
 
+export const runtime = "nodejs";
+
 export async function POST(req: Request) {
   try {
-    const { name, weight, art_number, mhd, qty = 1 } = await req.json();
+    console.log("---- PRINT API CALLED ----");
 
-    // Check required fields
+    // 🌐 HEADER LOGGEN
+    console.log("HEADERS:", Object.fromEntries(req.headers));
+
+    // 🔍 BODY EINLESEN & LOGGEN
+    const body = await req.json();
+    console.log("REQUEST BODY:", body);
+
+    const { name, weight, art_number, mhd, qty = 1 } = body;
+
     if (!art_number || !name) {
-      return new NextResponse("Missing fields", { status: 400 });
+      console.error("Missing required fields.");
+      return new NextResponse("Missing fields (art_number, name)", { status: 400 });
     }
 
-    // 1) TEMPLATE LADEN
-    const templatePath = path.join(process.cwd(), "labels", "60x30.zpl");
+    // 📁 TEMPLATE SUCHEN + PFAD LOGGEN
+    const base = process.cwd();
+    const candidates = [
+      path.join(base, "label", "60x30.zpl"),
+      path.join(base, "app","labels", "60x30.zpl"),
+    ];
+    const templatePath = candidates.find((p) => fs.existsSync(p));
+
+    console.log("TEMPLATE PATHS CHECKED:", candidates);
+    console.log("USING TEMPLATE PATH:", templatePath);
+
+    if (!templatePath) {
+      return new NextResponse(
+        `Template file not found.\nTried:\n${candidates.join("\n")}`,
+        { status: 500 }
+      );
+    }
+
+    // 📄 TEMPLATE LADEN & LOGGEN
     let zpl = fs.readFileSync(templatePath, "utf8");
+    console.log("RAW TEMPLATE:\n", zpl);
 
-    // 2) VARIABLEN ERSETZEN
+    // 🧩 VARIABLEN ERSETZEN
     zpl = zpl
-      .replaceAll("{{ART_NUMBER}}", art_number)
-      .replaceAll("{{NAME}}", name)
-      .replaceAll("{{WEIGHT}}", weight || "")
-      .replaceAll("{{MHD}}", mhd || "")
-      .replaceAll("{{QTY}}", qty.toString());
+      .replaceAll("{{ART_NUMBER}}", String(art_number))
+      .replaceAll("{{NAME}}", String(name))
+      .replaceAll("{{WEIGHT}}", weight ? String(weight) : "")
+      .replaceAll("{{MHD}}", mhd ? String(mhd) : "")
+      .replaceAll("{{QTY}}", String(qty));
 
-    console.log("FINAL ZPL SENT:", zpl);
+    console.log("FINAL ZPL TO SEND:\n", zpl);
 
-    // 3) TCP RAW SENDEN
-    const printerHost = "printer1.local"; // oder IP: "192.168.x.x"
+    // 🖨 PRINTER SETTINGS
+    const printerHost = "printer1.local";
     const port = 9100;
+    console.log(`Sending to printer ${printerHost}:${port}`);
 
-    await new Promise((resolve, reject) => {
+    // 🧵 SOCKET SENDEN
+    await new Promise<void>((resolve, reject) => {
       const client = new net.Socket();
 
       client.connect(port, printerHost, () => {
+        console.log("TCP CONNECTED");
         client.write(zpl, "utf8", () => {
+          console.log("TCP WRITE DONE");
           client.end();
-          resolve(true);
+          resolve();
         });
       });
 
       client.on("error", (err) => {
+        console.error("TCP ERROR:", err);
         reject(err);
+      });
+
+      client.on("close", () => {
+        console.log("TCP CONNECTION CLOSED");
       });
     });
 
+    console.log("---- PRINT SUCCESS ----");
+
     return NextResponse.json({ ok: true, message: "Label printed" });
-  } catch (err: any) {
-    console.error("PRINT ERROR:", err);
-    return new NextResponse(err?.message || "Unknown error", { status: 500 });
+  } catch (e: any) {
+    console.error("---- PRINT ERROR ----", e);
+    return new NextResponse(e?.message ?? "Unknown error", { status: 500 });
   }
 }
