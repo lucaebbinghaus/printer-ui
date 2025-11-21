@@ -9,3 +9,6 @@ services:
     restart: unless-stopped
     environment:
       - NODE_ENV=production
+
+    volumes:
+      - ./app/labels:/app/app/labels:ro
