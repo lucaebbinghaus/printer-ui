@@ -26,7 +26,7 @@ export async function POST(req: Request) {
     // 📁 TEMPLATE SUCHEN + PFAD LOGGEN
     const base = process.cwd();
     const candidates = [
-      path.join(base, "labels", "60x30.zpl")
+      path.join(base,"app", "labels", "60x30.zpl")
     ];
     const templatePath = candidates.find((p) => fs.existsSync(p));
 
