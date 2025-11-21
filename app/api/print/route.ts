@@ -20,7 +20,7 @@ export async function POST(req: Request) {
     };
 
     const printerRes = await fetch(
-      "http://BARTENDER-SERVER-1.local:80/Integration/print/Execute",
+      "http://localhost:80/Integration/print/Execute",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
