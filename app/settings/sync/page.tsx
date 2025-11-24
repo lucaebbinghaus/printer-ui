@@ -1,5 +1,6 @@
 "use client";
-import TouchKeyboard from "@/app/components/TouchKeyboard";
+import KeyboardInput from "@/app/components/KeyboardInput";
+
 import { useEffect, useState } from "react";
 import {
   Save,
@@ -183,15 +184,18 @@ export default function SettingsPage() {
           <label className="block text-sm font-medium mb-1 text-gray-700">
             Xano Base URL
           </label>
-          <input
+          <KeyboardInput
             value={baseUrl}
-            onChange={(e) => {
-              setBaseUrl(e.target.value);
-              setSuccess(null); setError(null); setSyncResult(null);
+            onValueChange={(v) => {
+              setBaseUrl(v);
+              setSuccess(null);
+              setError(null);
+              setSyncResult(null);
             }}
             className="w-full border border-gray-200 px-3 py-2 rounded-lg bg-white text-sm"
             placeholder="https://api.saf-tepasse.de/api:..."
           />
+
           <p className="mt-1 text-xs text-gray-500">
             Beispiel: https://api.saf-tepasse.de/api:j-HmV1Vn
           </p>
@@ -202,10 +206,10 @@ export default function SettingsPage() {
           <label className="block text-sm font-medium mb-1 text-gray-700">
             Endpunkt
           </label>
-          <input
+          <KeyboardInput
             value={productsEndpoint}
-            onChange={(e) => {
-              setProductsEndpoint(e.target.value);
+            onValueChange={(v) => {
+              setProductsEndpoint(v);
               setSuccess(null); setError(null); setSyncResult(null);
             }}
             className="w-full border border-gray-200 px-3 py-2 rounded-lg bg-white text-sm"
@@ -216,7 +220,7 @@ export default function SettingsPage() {
           </p>
         </div>
 
-         {/*
+        {/*
 
        
         <div>
@@ -243,10 +247,10 @@ export default function SettingsPage() {
           </label>
           <div className="flex items-center gap-2 border border-gray-200 px-3 py-2 rounded-lg bg-white">
             <Link2 className="w-4 h-4 text-gray-500" />
-            <input
+            <KeyboardInput
               value={printerId}
-              onChange={(e) => {
-                setPrinterId(e.target.value);
+              onValueChange={(v) => {
+                setPrinterId(v);
                 setSuccess(null); setError(null); setSyncResult(null);
               }}
               className="w-full bg-transparent text-sm outline-none"
@@ -283,8 +287,8 @@ export default function SettingsPage() {
             {saving ? "Speichern..." : "Speichern"}
           </button>
 
-          
-              
+
+
           <button
             onClick={syncProducts}
             disabled={syncing}
@@ -293,7 +297,7 @@ export default function SettingsPage() {
             <Download className="w-4 h-4" />
             {syncing ? "Abrufen..." : "Produkte abrufen"}
           </button>
-        
+
         </div>
 
         {/* Status */}

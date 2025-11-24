@@ -5,7 +5,7 @@ function createWindow() {
     width: 1280,
     height: 800,
     fullscreen: true,      // startet direkt fullscreen
-    //kiosk: true,           // echter Kiosk-Modus (kein Alt+Tab etc.)
+    kiosk: true,           // echter Kiosk-Modus (kein Alt+Tab etc.)
     autoHideMenuBar: true, // kein Menü
     frame: false,          // kein Fensterrahmen
     cursor: 'none',

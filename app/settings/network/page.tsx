@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Save, Wifi, Printer, Info, RefreshCcw } from "lucide-react";
+// Falls KeyboardInput in app/components liegt, nimm wieder "@/app/components/KeyboardInput"
+import KeyboardInput from "@/app/components/KeyboardInput";
 
 type NetworkSettings = {
-  deviceIpCurrent: string;   // read-only detected current IP
-  deviceIpConfig: string;    // configurable target IP
-  printerIp: string;         // configurable printer IP
+  deviceIpCurrent: string;
+  deviceIpConfig: string;
+  printerIp: string;
 };
 
 const isValidIPv4 = (ip: string) => {
@@ -31,10 +33,14 @@ export default function NetworkSettingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  async function loadSettings() {
-    setLoading(true);
+  const resetMessages = useCallback(() => {
     setError(null);
     setSuccess(null);
+  }, []);
+
+  const loadSettings = useCallback(async () => {
+    setLoading(true);
+    resetMessages();
 
     try {
       const res = await fetch("/api/settings/network", { cache: "no-store" });
@@ -44,16 +50,16 @@ export default function NetworkSettingsPage() {
       setData(json);
       setDeviceIpConfig(json.deviceIpConfig ?? "");
       setPrinterIp(json.printerIp ?? "");
-    } catch (e: any) {
+    } catch {
       setError("Konnte Netzwerk-Einstellungen nicht laden.");
     } finally {
       setLoading(false);
     }
-  }
+  }, [resetMessages]);
 
   useEffect(() => {
     loadSettings();
-  }, []);
+  }, [loadSettings]);
 
   const deviceIpConfigValid = useMemo(
     () => deviceIpConfig.length === 0 || isValidIPv4(deviceIpConfig),
@@ -64,21 +70,31 @@ export default function NetworkSettingsPage() {
     [printerIp]
   );
 
-  const canSave = deviceIpConfigValid && printerIpValid && !saving;
+  // Detect changes vs. last loaded data
+  const hasChanges = useMemo(() => {
+    if (!data) return false;
+    return (
+      (data.deviceIpConfig ?? "") !== deviceIpConfig ||
+      (data.printerIp ?? "") !== printerIp
+    );
+  }, [data, deviceIpConfig, printerIp]);
 
-  async function saveSettings() {
+  const canSave = deviceIpConfigValid && printerIpValid && hasChanges && !saving;
+
+  const saveSettings = useCallback(async () => {
     setSaving(true);
-    setError(null);
-    setSuccess(null);
+    resetMessages();
 
     try {
+      const payload = {
+        deviceIpConfig: deviceIpConfig.trim(),
+        printerIp: printerIp.trim(),
+      };
+
       const res = await fetch("/api/settings/network", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          deviceIpConfig: deviceIpConfig.trim(),
-          printerIp: printerIp.trim(),
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
@@ -92,12 +108,12 @@ export default function NetworkSettingsPage() {
       setError(
         e?.message?.includes("validation")
           ? "Bitte gültige IP-Adressen eingeben."
-          : "Speichern fehlgeschlagen."
+          : e?.message || "Speichern fehlgeschlagen."
       );
     } finally {
       setSaving(false);
     }
-  }
+  }, [deviceIpConfig, printerIp, resetMessages, loadSettings]);
 
   if (loading) {
     return (
@@ -116,12 +132,8 @@ export default function NetworkSettingsPage() {
   return (
     <div className="p-4">
       <div className="max-w-3xl space-y-4">
-        {/* Header row */}
         <div className="flex items-center justify-between">
-          <h1 className="text-lg font-semibold text-gray-900">
-            Netzwerk
-          </h1>
-
+          <h1 className="text-lg font-semibold text-gray-900">Netzwerk</h1>
           <button
             onClick={loadSettings}
             className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 active:scale-[0.98]"
@@ -131,19 +143,16 @@ export default function NetworkSettingsPage() {
           </button>
         </div>
 
-        {/* Info banner */}
         <div className="flex items-start gap-2 rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
           <Info className="mt-0.5 h-4 w-4" />
           <div>
-            Hier kannst du die IP-Adressen des Raspberry Pi (Gerät) und des Druckers
-            konfigurieren. Die aktuell erkannte Geräte-IP wird nur angezeigt.
+            Hier kannst du die IP-Adressen des Raspberry Pi (Gerät) und des Druckers konfigurieren.
+            Die aktuell erkannte Geräte-IP wird nur angezeigt.
           </div>
         </div>
 
-        {/* Card */}
         <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            {/* Current device ip (read-only) */}
             <div className="md:col-span-2">
               <label className="mb-1 block text-sm font-medium text-gray-700">
                 Aktuelle Geräte-IP (Raspberry Pi)
@@ -170,11 +179,11 @@ export default function NetworkSettingsPage() {
                 ].join(" ")}
               >
                 <Wifi className="h-4 w-4 text-gray-500" />
-                <input
+                <KeyboardInput
                   value={deviceIpConfig}
-                  onChange={(e) => {
-                    setDeviceIpConfig(e.target.value);
-                    setSuccess(null);
+                  onValueChange={(v) => {
+                    setDeviceIpConfig(v);
+                    resetMessages();
                   }}
                   placeholder="z. B. 192.168.1.50"
                   className="w-full bg-transparent text-sm text-gray-900 outline-none placeholder:text-gray-400"
@@ -201,11 +210,11 @@ export default function NetworkSettingsPage() {
                 ].join(" ")}
               >
                 <Printer className="h-4 w-4 text-gray-500" />
-                <input
+                <KeyboardInput
                   value={printerIp}
-                  onChange={(e) => {
-                    setPrinterIp(e.target.value);
-                    setSuccess(null);
+                  onValueChange={(v) => {
+                    setPrinterIp(v);
+                    resetMessages();
                   }}
                   placeholder="z. B. 192.168.1.60"
                   className="w-full bg-transparent text-sm text-gray-900 outline-none placeholder:text-gray-400"
@@ -219,7 +228,6 @@ export default function NetworkSettingsPage() {
             </div>
           </div>
 
-          {/* Footer row */}
           <div className="mt-5 flex items-center justify-between">
             <div className="text-xs text-gray-500">
               Änderungen an der Geräte-IP können einen Neustart/Netzwerk-Reconnect erfordern.
@@ -240,7 +248,6 @@ export default function NetworkSettingsPage() {
             </button>
           </div>
 
-          {/* Status messages */}
           {(error || success) && (
             <div className="mt-4 space-y-2">
               {error && (
