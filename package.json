@@ -6,7 +6,7 @@
   "dev": "next dev",
   "build": "next build",
   "start": "next start",
-  "electron": "electron main.js"
+  "electron": "electron electron-app/main.js"
 }
 ,
   "dependencies": {

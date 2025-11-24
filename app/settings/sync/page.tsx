@@ -200,7 +200,7 @@ export default function SettingsPage() {
         {/* Endpoint */}
         <div>
           <label className="block text-sm font-medium mb-1 text-gray-700">
-            Products Endpoint
+            Endpunkt
           </label>
           <input
             value={productsEndpoint}
@@ -216,7 +216,9 @@ export default function SettingsPage() {
           </p>
         </div>
 
-        {/* Interval */}
+         {/*
+
+       
         <div>
           <label className="block text-sm font-medium mb-1 text-gray-700">
             Sync Intervall (Minuten)
@@ -232,11 +234,12 @@ export default function SettingsPage() {
             className="w-full border border-gray-200 px-3 py-2 rounded-lg bg-white text-sm"
           />
         </div>
+        */}
 
         {/* Printer ID */}
         <div>
           <label className="block text-sm font-medium mb-1 text-gray-700">
-            Printer ID (auth_token)
+            Printer ID
           </label>
           <div className="flex items-center gap-2 border border-gray-200 px-3 py-2 rounded-lg bg-white">
             <Link2 className="w-4 h-4 text-gray-500" />
@@ -252,7 +255,7 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* API Key (optional) */}
+        {/* API Key (optional) 
         <div>
           <label className="block text-sm font-medium mb-1 text-gray-700">
             API Key (optional)
@@ -267,6 +270,7 @@ export default function SettingsPage() {
             placeholder="falls Xano Authorization braucht"
           />
         </div>
+        */}
 
         {/* Buttons */}
         <div className="flex gap-2">
@@ -279,6 +283,8 @@ export default function SettingsPage() {
             {saving ? "Speichern..." : "Speichern"}
           </button>
 
+          
+              
           <button
             onClick={syncProducts}
             disabled={syncing}
@@ -287,6 +293,7 @@ export default function SettingsPage() {
             <Download className="w-4 h-4" />
             {syncing ? "Abrufen..." : "Produkte abrufen"}
           </button>
+        
         </div>
 
         {/* Status */}
