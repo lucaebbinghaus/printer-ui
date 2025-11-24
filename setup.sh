@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "=== Printer UI Setup Script (Docker backend + Electron host) ==="
+echo "=== Printer UI Setup Script (Docker backend + Electron host, Bookworm) ==="
 
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 AUTOSTART="$HOME/.config/lxsession/LXDE-pi/autostart"
@@ -37,20 +37,33 @@ if ! grep -q "unclutter" "$AUTOSTART" 2>/dev/null; then
 fi
 
 # -------------------------------
-# 4) Docker installieren + für pi freigeben
+# 4) Docker + Compose aus OFFIZIELLEM Docker-Repo installieren
 # -------------------------------
-echo "[4/9] Installing Docker + compose plugin..."
-sudo apt install -y docker.io docker-compose-plugin
+echo "[4/9] Installing Docker + compose plugin (from official Docker repo)..."
+
+sudo apt install -y ca-certificates curl gnupg
+
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
+
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+  https://download.docker.com/linux/debian bookworm stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+sudo apt update
+
+sudo apt install -y \
+  docker-ce docker-ce-cli containerd.io \
+  docker-buildx-plugin docker-compose-plugin
 
 sudo systemctl enable docker
 sudo systemctl start docker
-
-# pi zur docker Gruppe hinzufügen (Greift nach Logout/Login oder Reboot)
 sudo usermod -aG docker pi
 
 # -------------------------------
-# 5) Repo Dependencies nur für Electron installieren
-#    (Electron läuft auf Host)
+# 5) Node/Electron Dependencies installieren (Electron läuft auf Host)
 # -------------------------------
 echo "[5/9] Installing Node dependencies for Electron..."
 cd "$PROJECT_DIR"
@@ -59,21 +72,19 @@ npm install
 npm install electron --save-dev
 
 # -------------------------------
-# 6) Docker Images/Services bauen
-#    (compose wird vorausgesetzt)
+# 6) Docker Images/Services bauen (compose wird vorausgesetzt)
 # -------------------------------
 echo "[6/9] Building Docker services..."
+
 if [ ! -f docker-compose.yml ] && [ ! -f docker-compose.yaml ]; then
   echo "ERROR: No docker-compose.yml found in $PROJECT_DIR"
-  echo "Please add docker-compose.yml (recommended) or tell me to adapt this script for single Dockerfile."
   exit 1
 fi
 
 docker compose build
 
 # -------------------------------
-# 7) systemd Service für Docker-Backend
-#    robust als detach/oneshot Service
+# 7) systemd Service für Docker-Backend (detach/oneshot)
 # -------------------------------
 echo "[7/9] Installing systemd service for Docker backend..."
 
@@ -96,8 +107,7 @@ WantedBy=multi-user.target
 EOF
 
 # -------------------------------
-# 8) systemd Service für Electron-Kiosk (Host)
-#    extra robust gegen X11-Start-Rennen
+# 8) systemd Service für Electron-Kiosk (Host mit X11)
 # -------------------------------
 echo "[8/9] Installing systemd service for Electron kiosk..."
 
@@ -127,14 +137,14 @@ sudo systemctl enable printer-ui.service
 sudo systemctl enable printer-ui-electron.service
 
 # -------------------------------
-# 9) Desktop Autologin sicherstellen
+# 9) Desktop-Autologin sicherstellen
 # -------------------------------
-echo "[9/9] Ensuring desktop autologin..."
+echo "[9/9] Enabling desktop autologin..."
 sudo raspi-config nonint do_boot_behaviour B4
 
 echo "Starting services..."
 sudo systemctl start printer-ui.service
 sudo systemctl start printer-ui-electron.service
 
-echo "=== Setup complete. Reboot recommended. ==="
-echo "NOTE: Docker group change may require logout/login or reboot to take effect."
+echo "=== Setup complete. REBOOT HIGHLY RECOMMENDED. ==="
+echo "NOTE: Docker group membership for 'pi' activates after reboot."
