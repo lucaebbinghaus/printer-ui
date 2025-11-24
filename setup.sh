@@ -1,63 +1,92 @@
 #!/bin/bash
 set -e
 
-echo "=== Printer UI Setup Script ==="
+echo "=== Printer UI Setup Script (Docker backend + Electron host) ==="
+
+PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
+AUTOSTART="$HOME/.config/lxsession/LXDE-pi/autostart"
 
 # -------------------------------
 # 1) System aktualisieren
 # -------------------------------
-echo "[1/8] Updating system..."
+echo "[1/9] Updating system..."
 sudo apt update -y
 sudo apt upgrade -y
 
 # -------------------------------
 # 2) On-Screen Keyboard installieren
 # -------------------------------
-echo "[2/8] Installing Onboard (On-Screen-Keyboard)..."
+echo "[2/9] Installing Onboard (On-Screen-Keyboard)..."
 sudo apt install -y onboard
-
-mkdir -p ~/.config/lxsession/LXDE-pi
-AUTOSTART=~/.config/lxsession/LXDE-pi/autostart
-
-if ! grep -q "onboard" "$AUTOSTART"; then
+mkdir -p "$(dirname "$AUTOSTART")"
+if ! grep -q "onboard" "$AUTOSTART" 2>/dev/null; then
   echo "@onboard" >> "$AUTOSTART"
 fi
 
 # -------------------------------
-# 3) Node, npm & electron deps installieren
+# 3) Cursor ausblenden (unclutter)
 # -------------------------------
-echo "[3/8] Installing Node dependencies..."
-cd "$(dirname "$0")"
+echo "[3/9] Installing unclutter..."
+sudo apt install -y unclutter
+if ! grep -q "unclutter" "$AUTOSTART" 2>/dev/null; then
+  echo "@unclutter -idle 0 -root" >> "$AUTOSTART"
+fi
 
+# -------------------------------
+# 4) Docker installieren + für pi freigeben
+# -------------------------------
+echo "[4/9] Installing Docker + compose plugin..."
+sudo apt install -y docker.io docker-compose-plugin
+sudo systemctl enable docker
+sudo systemctl start docker
+sudo usermod -aG docker pi
+
+# -------------------------------
+# 5) Repo Dependencies nur für Electron installieren
+#    (Electron läuft auf Host)
+# -------------------------------
+echo "[5/9] Installing Node dependencies for Electron..."
+cd "$PROJECT_DIR"
 npm install
 npm install electron --save-dev
 
 # -------------------------------
-# 4) Next.js builden
+# 6) Docker Images/Services bauen
 # -------------------------------
-echo "[4/8] Building Next.js application..."
-npm run build
+echo "[6/9] Building Docker services..."
+if [ -f docker-compose.yml ] || [ -f docker-compose.yaml ]; then
+  docker compose build
+else
+  echo "No docker-compose.yml found. Building single Dockerfile image..."
+  docker build -t printer-ui .
+fi
 
 # -------------------------------
-# 5) systemd Services installieren
+# 7) systemd Service für Docker-Backend
 # -------------------------------
-echo "[5/8] Installing systemd services..."
+echo "[7/9] Installing systemd service for Docker backend..."
 
 sudo tee /etc/systemd/system/printer-ui.service > /dev/null <<EOF
 [Unit]
-Description=Printer UI Next.js Backend
-After=network.target
+Description=Printer UI Backend (Docker)
+After=docker.service network.target
+Requires=docker.service
 
 [Service]
-WorkingDirectory=$HOME/printer-ui
-ExecStart=/usr/bin/npm start
+WorkingDirectory=$PROJECT_DIR
+ExecStart=/usr/bin/docker compose up
+ExecStop=/usr/bin/docker compose down
 Restart=always
 User=pi
-Environment=PORT=3000
 
 [Install]
 WantedBy=multi-user.target
 EOF
+
+# -------------------------------
+# 8) systemd Service für Electron-Kiosk (Host)
+# -------------------------------
+echo "[8/9] Installing systemd service for Electron kiosk..."
 
 sudo tee /etc/systemd/system/printer-ui-electron.service > /dev/null <<EOF
 [Unit]
@@ -66,7 +95,7 @@ After=graphical.target printer-ui.service
 Wants=graphical.target
 
 [Service]
-WorkingDirectory=$HOME/printer-ui
+WorkingDirectory=$PROJECT_DIR
 ExecStart=/usr/bin/npm run electron
 User=pi
 Restart=always
@@ -83,41 +112,14 @@ sudo systemctl enable printer-ui.service
 sudo systemctl enable printer-ui-electron.service
 
 # -------------------------------
-# 6) LXDE Autostart sicherstellen
+# 9) Desktop Autologin sicherstellen
 # -------------------------------
-echo "[6/8] Ensuring desktop autologin & X11..."
+echo "[9/9] Ensuring desktop autologin..."
 sudo raspi-config nonint do_boot_behaviour B4
 
-# -------------------------------
-# 7) Electron icons + cursor fix optional
-# -------------------------------
-echo "[7/8] Creating cursor-fix for full kiosk..."
-sudo apt install -y unclutter
-if ! grep -q "unclutter" "$AUTOSTART"; then
-  echo "@unclutter" >> "$AUTOSTART"
-fi
-
-
-echo "[X] Installing unclutter for cursor hiding..."
-sudo apt install -y unclutter
-
-# Autostart einrichten (falls nicht vorhanden)
-mkdir -p /home/pi/.config/lxsession/LXDE-pi
-AUTOSTART="/home/pi/.config/lxsession/LXDE-pi/autostart"
-
-# Eintrag nur einmal hinzufügen
-if ! grep -q "unclutter" "$AUTOSTART"; then
-    echo "@unclutter -idle 0 -root" >> "$AUTOSTART"
-fi
-
-echo "Unclutter installed and autostart configured."
-
-
-# -------------------------------
-# 8) Alles starten
-# -------------------------------
-echo "[8/8] Starting services..."
+echo "Starting services..."
 sudo systemctl start printer-ui.service
 sudo systemctl start printer-ui-electron.service
 
 echo "=== Setup complete. Reboot recommended. ==="
+echo "NOTE: You may need to logout/login once so docker group takes effect."
