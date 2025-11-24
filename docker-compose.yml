@@ -1,17 +1,15 @@
 version: "3.8"
-
 services:
-  app:
-    build: .
+  printer-ui:
+    image: printer-ui:latest
     container_name: printer-ui
+    restart: unless-stopped
     ports:
       - "3000:3000"
-    restart: unless-stopped
     environment:
-      - NODE_ENV=production
-      
+      - APP_DATA_DIR=/data
     volumes:
-      - ./app/labels:/app/app/labels:ro
-    
-    extra_hosts:
-      - "printer1.local:192.168.0.63"
+      - printer-ui-data:/data
+
+volumes:
+  printer-ui-data:

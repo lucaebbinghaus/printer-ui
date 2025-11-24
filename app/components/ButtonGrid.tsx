@@ -38,16 +38,17 @@ export default function ButtonGrid({ buttons }: { buttons: PrinterProduct[] }) {
   }
 
   return (
-    <section className="mx-auto mt-8 w-full max-w-7xl px-2 sm:px-4">
+    <section className=" mt-8 w-full max-w-7xl px-2 sm:px-4">
       <div
-        className="
-          grid gap-4
-          grid-cols-1
-          sm:grid-cols-2
-          md:grid-cols-3
-          lg:grid-cols-5
-        "
-      >
+      className="
+        grid
+        grid-cols-2 sm:grid-cols-3 md:grid-cols-4
+        gap-4
+        justify-start        /* WICHTIG */
+        items-start          /* optional */
+        justify-items-start  /* WICHTIG */
+      "
+    >
         {buttons.map((b) => (
           <ButtonCard key={b.id} item={b} onClick={() => handlePrint(b)} />
         ))}

@@ -8,6 +8,7 @@ function createWindow() {
     kiosk: true,           // echter Kiosk-Modus (kein Alt+Tab etc.)
     autoHideMenuBar: true, // kein Menü
     frame: false,          // kein Fensterrahmen
+    cursor: 'none',
     alwaysOnTop: true,     // bleibt oben
     webPreferences: {
       nodeIntegration: false,

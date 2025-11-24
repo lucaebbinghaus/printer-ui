@@ -24,6 +24,7 @@ export default function ButtonCard({
     <button
       onClick={onClick}
       className="
+        flex
         group relative h-44 w-full rounded-xl border border-gray-200 bg-white
         p-4 text-left shadow-sm
         hover:border-gray-300 hover:shadow-md

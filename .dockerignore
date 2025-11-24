@@ -6,3 +6,4 @@ Dockerfile
 docker-compose.yml
 .env*
 npm-debug.log
+data
