@@ -1,6 +1,6 @@
-version: "3.8"
 services:
   printer-ui:
+    build: .
     image: printer-ui:local
     container_name: printer-ui
     restart: unless-stopped
