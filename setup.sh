@@ -103,7 +103,7 @@ if [ ! -f docker-compose.yml ] && [ ! -f docker-compose.yaml ]; then
   exit 1
 fi
 
-docker compose build
+sudo docker compose build
 
 # -------------------------------
 # 7) systemd Service für Docker-Backend (detach/oneshot)
