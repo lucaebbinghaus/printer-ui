@@ -63,4 +63,61 @@ sudo tee /etc/systemd/system/printer-ui-electron.service > /dev/null <<EOF
 [Unit]
 Description=Printer UI Electron Kiosk
 After=graphical.target printer-ui.service
-Wants=graphical.tar
+Wants=graphical.target
+
+[Service]
+WorkingDirectory=$HOME/printer-ui
+ExecStart=/usr/bin/npm run electron
+User=pi
+Restart=always
+RestartSec=2
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/pi/.Xauthority
+
+[Install]
+WantedBy=graphical.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable printer-ui.service
+sudo systemctl enable printer-ui-electron.service
+
+# -------------------------------
+# 6) LXDE Autostart sicherstellen
+# -------------------------------
+echo "[6/8] Ensuring desktop autologin & X11..."
+sudo raspi-config nonint do_boot_behaviour B4
+
+# -------------------------------
+# 7) Electron icons + cursor fix optional
+# -------------------------------
+echo "[7/8] Creating cursor-fix for full kiosk..."
+sudo apt install -y unclutter
+if ! grep -q "unclutter" "$AUTOSTART"; then
+  echo "@unclutter" >> "$AUTOSTART"
+fi
+
+
+echo "[X] Installing unclutter for cursor hiding..."
+sudo apt install -y unclutter
+
+# Autostart einrichten (falls nicht vorhanden)
+mkdir -p /home/pi/.config/lxsession/LXDE-pi
+AUTOSTART="/home/pi/.config/lxsession/LXDE-pi/autostart"
+
+# Eintrag nur einmal hinzufügen
+if ! grep -q "unclutter" "$AUTOSTART"; then
+    echo "@unclutter -idle 0 -root" >> "$AUTOSTART"
+fi
+
+echo "Unclutter installed and autostart configured."
+
+
+# -------------------------------
+# 8) Alles starten
+# -------------------------------
+echo "[8/8] Starting services..."
+sudo systemctl start printer-ui.service
+sudo systemctl start printer-ui-electron.service
+
+echo "=== Setup complete. Reboot recommended. ==="
