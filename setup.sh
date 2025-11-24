@@ -61,6 +61,28 @@ sudo apt install -y \
 sudo systemctl enable docker
 sudo systemctl start docker
 sudo usermod -aG docker pi
+# -------------------------------
+# 5) Node.js + npm installieren (Node 20 LTS)
+# -------------------------------
+echo "[5/10] Installing Node.js 20 LTS..."
+
+sudo apt update
+sudo apt install -y ca-certificates curl gnupg
+
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
+  | sudo gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
+sudo chmod a+r /etc/apt/keyrings/nodesource.gpg
+
+echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] \
+https://deb.nodesource.com/node_20.x nodistro main" \
+| sudo tee /etc/apt/sources.list.d/nodesource.list
+
+sudo apt update
+sudo apt install -y nodejs
+
+node -v
+npm -v
 
 # -------------------------------
 # 5) Node/Electron Dependencies installieren (Electron läuft auf Host)
