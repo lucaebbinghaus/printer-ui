@@ -1,7 +1,7 @@
 version: "3.8"
 services:
   printer-ui:
-    image: printer-ui:latest
+    image: printer-ui:local
     container_name: printer-ui
     restart: unless-stopped
     ports:
