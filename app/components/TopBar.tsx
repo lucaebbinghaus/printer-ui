@@ -55,7 +55,7 @@ export default function TopBar() {
           className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 shadow-sm transition hover:bg-gray-50 active:scale-[0.98]"
           onClick={() => {
             // Next.js App Router Refresh → triggert Server Components neu
-            router.refresh();
+            location.reload();
           }}
         >
           <RotateCcw className="h-4 w-4" />
