@@ -1,6 +1,8 @@
 // app/components/sideNav.ts
 import { readProducts, type Preset } from "@/app/lib/productsStore";
 
+export type PrinterProduct = any;
+
 type NavItem = {
   key: string;
   label: string;
@@ -8,6 +10,19 @@ type NavItem = {
   icon?: string;
 };
 
+/**
+ * Wird von z.B. /labels/[presetId]/page.tsx importiert.
+ * Liefert alle Presets aus products.json.
+ */
+export async function getProducts(): Promise<Preset[]> {
+  const presets = await readProducts();
+  console.log("[getProducts] presets:", presets.length);
+  return presets;
+}
+
+/**
+ * Wird von LeftSidebar benutzt, um die Navigation zu bauen.
+ */
 export async function getSideNav(): Promise<{
   labels: NavItem[];
   status: NavItem[];
@@ -33,8 +48,18 @@ export async function getSideNav(): Promise<{
     ],
     settings: [
       { key: "general", label: "Allgemein", href: "/settings", icon: "Sliders" },
-      { key: "network", label: "Netzwerk", href: "/settings/network", icon: "Wrench" },
-      { key: "sync", label: "Sync", href: "/settings/sync", icon: "RefreshCcw" },
+      {
+        key: "network",
+        label: "Netzwerk",
+        href: "/settings/network",
+        icon: "Wrench",
+      },
+      {
+        key: "sync",
+        label: "Sync",
+        href: "/settings/sync",
+        icon: "RefreshCcw",
+      },
     ],
   };
 }
