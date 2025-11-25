@@ -8,8 +8,18 @@ services:
       - "3000:3000"
     environment:
       - APP_DATA_DIR=/data
+      - ZPLBOX_URL=http://zplbox:8080
     volumes:
       - printer-ui-data:/data
+    depends_on:
+      - zplbox
+
+  zplbox:
+    image: ghcr.io/ricebean-net/zplbox:latest
+    container_name: zplbox
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
 
 volumes:
   printer-ui-data:
