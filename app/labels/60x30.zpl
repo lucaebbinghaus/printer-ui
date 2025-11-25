@@ -1,4 +1,5 @@
 ﻿^XA
+{{PQ}}
 ^FO398,31
 ^BY4^BCN,85,N,N^FD>;{{ART_NUMBER}}^FS
 ^FT491,146

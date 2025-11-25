@@ -10,7 +10,6 @@ import {
   XCircle,
 } from "lucide-react";
 
-// Typen aus dem Watcher gespiegelt
 type LampStatus = "ok" | "warning" | "error" | "unknown";
 
 type PrinterNode = {
@@ -55,11 +54,35 @@ function statusLabel(status: LampStatus): string {
 
 function deriveOverallStatus(nodes: PrinterNode[]): LampStatus {
   if (!nodes || nodes.length === 0) return "unknown";
-  if (nodes.some((n) => n.status === "error")) return "error";
-  if (nodes.some((n) => n.status === "warning")) return "warning";
-  if (nodes.every((n) => n.status === "ok")) return "ok";
+
+  const errorNode = nodes.find((n) => n.name === "ERROR");
+  const readyNode = nodes.find((n) => n.name === "READY");
+  const errorTextNode = nodes.find((n) => n.name === "ERROR_TEXT");
+
+  // 1) ERROR-Flag
+  if (errorNode?.status === "error") return "error";
+
+  // 2) Fehlertext gesetzt?
+  if (errorTextNode?.rawValue) {
+    const v = errorTextNode.rawValue as any;
+    const text =
+      typeof v === "string"
+        ? v
+        : typeof v?.text === "string"
+        ? v.text
+        : "";
+    if (text) return "error";
+  }
+
+  // 3) READY fehlt → Warnung
+  if (readyNode?.status === "warning") return "warning";
+
+  // 4) Wenn wir überhaupt irgendwas Sinnvolles haben → OK
+  if (errorNode || readyNode) return "ok";
+
   return "unknown";
 }
+
 
 export default function StatusPage() {
   const router = useRouter();
@@ -98,8 +121,13 @@ export default function StatusPage() {
       console.error("Status SSE error", ev);
       setSseError("Verbindung zum Status-Stream unterbrochen.");
       setOverallStatus("error");
-      // Verbindung schließen – evtl. später Auto-Reconnect ergänzen
       es?.close();
+      // Optional: einfacher Auto-Reconnect
+      setTimeout(() => {
+        es = new EventSource("/api/status/printer/stream");
+        es.onmessage = handleMessage;
+        es.onerror = handleError;
+      }, 3000);
     };
 
     es.onmessage = handleMessage;
@@ -112,6 +140,28 @@ export default function StatusPage() {
 
   const connected = data?.connected ?? false;
 
+  // Job-bezogene Nodes
+  const activeNode = data?.nodes.find((n) => n.name === "ACTIVE");
+  const labelsNode = data?.nodes.find((n) => n.name === "LABELS_TO_PRINT");
+  const errorTextNode = data?.nodes.find((n) => n.name === "ERROR_TEXT");
+
+  const isActive = Boolean(activeNode?.rawValue);
+  const labelsRemaining =
+    typeof labelsNode?.rawValue === "number"
+      ? labelsNode.rawValue
+      : labelsNode?.rawValue ?? null;
+
+  let errorText = "";
+  if (errorTextNode?.rawValue) {
+    const v = errorTextNode.rawValue as any;
+    errorText =
+      typeof v === "string"
+        ? v
+        : typeof v?.text === "string"
+        ? v.text
+        : String(v);
+  }
+
   if (loading && !data) {
     return <div className="p-4">Lade Druckerstatus…</div>;
   }
@@ -123,7 +173,6 @@ export default function StatusPage() {
         <h1 className="text-lg font-semibold">Printer / OPC-UA Status</h1>
         <button
           onClick={() => {
-            // Harte Aktualisierung der Seite & SSE-Verbindung
             router.refresh();
             location.reload();
           }}
@@ -160,11 +209,29 @@ export default function StatusPage() {
               </div>
             </div>
           </div>
+
+        {/* Gesamtstatus-Chip */}
           {connected ? (
-            <span className="inline-flex items-center gap-1 text-xs text-green-700 bg-green-50 border border-green-200 px-2 py-1 rounded-full">
-              <CheckCircle2 className="w-3 h-3" />
-              OK
-            </span>
+            overallStatus === "ok" ? (
+              <span className="inline-flex items-center gap-1 text-xs text-green-700 bg-green-50 border border-green-200 px-2 py-1 rounded-full">
+                <CheckCircle2 className="w-3 h-3" />
+                OK
+              </span>
+            ) : overallStatus === "warning" ? (
+              <span className="inline-flex items-center gap-1 text-xs text-yellow-700 bg-yellow-50 border border-yellow-200 px-2 py-1 rounded-full">
+                <AlertTriangle className="w-3 h-3" />
+                Warnung
+              </span>
+            ) : overallStatus === "error" ? (
+              <span className="inline-flex items-center gap-1 text-xs text-red-700 bg-red-50 border border-red-200 px-2 py-1 rounded-full">
+                <XCircle className="w-3 h-3" />
+                Fehler
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-xs text-gray-600 bg-gray-50 border border-gray-200 px-2 py-1 rounded-full">
+                Unbekannt
+              </span>
+            )
           ) : (
             <span className="inline-flex items-center gap-1 text-xs text-red-700 bg-red-50 border border-red-200 px-2 py-1 rounded-full">
               <XCircle className="w-3 h-3" />
@@ -191,6 +258,51 @@ export default function StatusPage() {
             <StatusLamp status="unknown" />
             <span>Unbekannt</span>
           </div>
+        </div>
+      </section>
+
+      {/* Job-Status */}
+      <section className="p-5 bg-white border border-gray-200 rounded-xl shadow-sm space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-gray-800">Job-Status</h2>
+          {isActive ? (
+            <span className="inline-flex items-center gap-1 text-xs text-blue-700 bg-blue-50 border border-blue-200 px-2 py-1 rounded-full">
+              <span className="inline-block w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+              Läuft
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-xs text-gray-600 bg-gray-50 border border-gray-200 px-2 py-1 rounded-full">
+              <span className="inline-block w-2 h-2 rounded-full bg-gray-400" />
+              Leerlauf
+            </span>
+          )}
+        </div>
+
+        <div className="space-y-1 text-sm text-gray-800">
+          <div className="flex justify-between">
+            <span>Aktiv:</span>
+            <span className="font-medium">
+              {isActive ? "Druckt / interpretiert" : "Nein"}
+            </span>
+          </div>
+
+          {labelsRemaining !== null && (
+            <div className="flex justify-between">
+              <span>Verbleibende Etiketten (Labels To Print):</span>
+              <span className="font-mono font-medium">
+                {String(labelsRemaining)}
+              </span>
+            </div>
+          )}
+
+          {errorText && (
+            <div className="pt-2 border-t border-gray-100 text-sm text-red-700">
+              <div className="text-xs uppercase tracking-wide text-red-500 mb-0.5">
+                Fehlertext vom Drucker
+              </div>
+              <div>{errorText}</div>
+            </div>
+          )}
         </div>
       </section>
 

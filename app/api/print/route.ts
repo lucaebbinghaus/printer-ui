@@ -4,7 +4,6 @@ import path from "path";
 import net from "net";
 import { getConfig } from "@/app/lib/storage";
 
-
 export const runtime = "nodejs";
 
 // -------- HTML -> Plaintext Helpers --------
@@ -54,21 +53,33 @@ export async function POST(req: Request) {
       weight,
       art_number,
       mhd,
-      qty = 1
+      qty, // optional – Config übernimmt Default
     } = body;
 
     const ingredientsText = htmlToPlainText(html);
 
     if (!art_number || !name) {
       console.error("Missing required fields.");
-      return new NextResponse("Missing fields (art_number, name)", { status: 400 });
+      return new NextResponse("Missing fields (art_number, name)", {
+        status: 400,
+      });
     }
+
+    // CONFIG LADEN
+    const config = await getConfig();
+
+    // Default-Menge aus Config (general.defaultLabelQty)
+    const configDefaultQty = Number(config.general?.defaultLabelQty ?? 1);
+
+    // finale Menge: Request > Config > 1
+    const finalQtyRaw =
+      qty !== undefined && qty !== null ? qty : configDefaultQty;
+
+    const finalQty = Math.max(1, Number(finalQtyRaw) || 1);
 
     // TEMPLATE SUCHEN
     const base = process.cwd();
-    const candidates = [
-      path.join(base, "app", "labels", "60x30.zpl"),
-    ];
+    const candidates = [path.join(base, "app", "labels", "60x30.zpl")];
     const templatePath = candidates.find((p) => fs.existsSync(p));
 
     console.log("TEMPLATE PATHS CHECKED:", candidates);
@@ -84,32 +95,33 @@ export async function POST(req: Request) {
     // TEMPLATE LADEN
     let zpl = fs.readFileSync(templatePath, "utf8");
 
-    // VARIABLEN ERSETZEN
+    // VARIABLEN ERSETZEN (Textfelder)
     zpl = zpl
       .replaceAll("{{ART_NUMBER}}", String(art_number))
       .replaceAll("{{NAME}}", String(name))
       .replaceAll("{{WEIGHT}}", weight ? String(weight) : "")
       .replaceAll("{{MHD}}", mhd ? String(mhd) : "")
-      .replaceAll("{{QTY}}", String(qty))
+      .replaceAll("{{QTY}}", String(finalQty)) // falls du Menge auf dem Label anzeigen willst
       .replaceAll("{{INGREDIENTS}}", ingredientsText);
+
+    // ZPL-Printmenge (^PQ) einsetzen, falls Platzhalter vorhanden
+    if (zpl.includes("{{PQ}}")) {
+      const pqCmd = `^PQ${finalQty},0,1,Y`;
+      zpl = zpl.replaceAll("{{PQ}}", pqCmd);
+    }
 
     // wichtig gegen leeres Label durch trailing whitespace
     zpl = zpl.trimEnd();
 
     console.log("FINAL ZPL TO SEND:\n", zpl);
 
-        // PRINTER SETTINGS aus config.json
-    const config = await getConfig();
-
-    // Erwarteter Pfad aus storage.ts:
-    // config.network.printerIp
+    // PRINTER SETTINGS aus config.json
     const printerHost =
       (config.network?.printerIp || "").trim() || "printer1.local";
 
     const port = 9100;
 
     console.log(`Sending to printer ${printerHost}:${port}`);
-
 
     // TCP SENDEN
     await new Promise<void>((resolve, reject) => {
@@ -135,8 +147,10 @@ export async function POST(req: Request) {
     });
 
     console.log("---- PRINT SUCCESS ----");
-    return NextResponse.json({ ok: true, message: "Label printed" });
-
+    return NextResponse.json({
+      ok: true,
+      message: `Label printed (${finalQty}x via ^PQ)`,
+    });
   } catch (e: any) {
     console.error("---- PRINT ERROR ----", e);
     return new NextResponse(e?.message ?? "Unknown error", { status: 500 });

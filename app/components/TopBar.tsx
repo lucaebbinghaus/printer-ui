@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { NAV_ITEMS } from "./nav";
-import { RotateCcw } from "lucide-react";
+import { RotateCcw, OctagonX } from "lucide-react";
 import type { LampStatus, PrinterNode } from "@/app/lib/opcuaWatcher";
 
 type PrinterStatusResponse = {
@@ -20,7 +20,9 @@ function StatusDot({ status }: { status: LampStatus }) {
     error: "bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.6)]",
     unknown: "bg-gray-400",
   };
-  return <span className={`inline-block w-2.5 h-2.5 rounded-full ${map[status]}`} />;
+  return (
+    <span className={`inline-block w-2.5 h-2.5 rounded-full ${map[status]}`} />
+  );
 }
 
 function deriveOverallStatus(nodes: PrinterNode[]): LampStatus {
@@ -37,6 +39,7 @@ export default function TopBar() {
 
   const [overallStatus, setOverallStatus] = useState<LampStatus>("unknown");
   const [statusText, setStatusText] = useState("Status…");
+  const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
     let es: EventSource | null = new EventSource(
@@ -74,7 +77,6 @@ export default function TopBar() {
       setOverallStatus("error");
       setStatusText("Verbindung unterbrochen");
       es?.close();
-      // optional: Auto-Reconnect
       setTimeout(() => {
         es = new EventSource("/api/status/printer/stream");
         es.onmessage = handleMessage;
@@ -89,6 +91,34 @@ export default function TopBar() {
       es?.close();
     };
   }, []);
+
+  async function handleCancelJobs() {
+    setCancelling(true);
+    try {
+      const res = await fetch("/api/print/cancel", {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const msg = await res.text().catch(() => "");
+        throw new Error(msg || "Abbruch fehlgeschlagen");
+      }
+      const json = await res.json();
+      console.log("Cancel result:", json);
+      // Kleines Feedback im Status-Text
+      setStatusText("Jobs abgebrochen");
+      setTimeout(() => {
+        // nach kurzer Zeit wieder normalen Status anzeigen lassen (SSE aktualisiert sowieso)
+        setStatusText((prev) =>
+          prev === "Jobs abgebrochen" ? "Drucker OK" : prev
+        );
+      }, 3000);
+    } catch (e) {
+      console.error(e);
+      setStatusText("Abbruch-Fehler");
+    } finally {
+      setCancelling(false);
+    }
+  }
 
   return (
     <header className="w-full bg-[#efefef] border-b border-gray-200">
@@ -124,13 +154,25 @@ export default function TopBar() {
           </div>
         </div>
 
-        {/* Right: Status + Refresh */}
+        {/* Right: Status + Cancel + Refresh */}
         <div className="flex items-center gap-3">
           <div className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1 text-xs text-gray-700 shadow-sm">
             <StatusDot status={overallStatus} />
             <span>{statusText}</span>
           </div>
 
+          {/* Cancel Button */}
+          <button
+            aria-label="Alle Druckjobs abbrechen"
+            title="Alle Druckjobs abbrechen (TotalCancel)"
+            disabled={cancelling}
+            className="inline-flex h-9 w-20 items-center justify-center rounded-lg border border-red-200 bg-white text-red-600 shadow-sm hover:bg-red-50 active:scale-[0.98] disabled:opacity-60"
+            onClick={handleCancelJobs}
+          >
+            <OctagonX className="h-4 w-4" />
+          </button>
+
+          {/* Refresh Button */}
           <button
             aria-label="Refresh"
             className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 shadow-sm hover:bg-gray-50 active:scale-[0.98]"

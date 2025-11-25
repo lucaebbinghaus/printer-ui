@@ -6,14 +6,11 @@ import path from "path";
  * ----------------------------------------------------- */
 
 const DATA_DIR =
-  process.env.APP_DATA_DIR ||
-  path.join(process.cwd(), "data"); // im Dev: ./data
-
+  process.env.APP_DATA_DIR || path.join(process.cwd(), "data"); // im Dev: ./data
 
 async function ensureDir() {
   await fs.mkdir(DATA_DIR, { recursive: true });
 }
-
 
 /* -------------------------------------------------------
  * JSON lesen/schreiben
@@ -69,8 +66,6 @@ async function writeJson<T>(fileName: string, data: T): Promise<void> {
   await fs.unlink(tempPath).catch(() => {});
 }
 
-
-
 /* -------------------------------------------------------
  * AppConfig – endgültiges Schema
  * ----------------------------------------------------- */
@@ -84,10 +79,14 @@ export type AppConfig = {
   };
 
   printer: {
-    defaultCopies: number;
     labelTemplate: string;
     dpi: number;
     rotate: number;
+  };
+
+  // Allgemeine Settings (u.a. Default-Etikettenanzahl)
+  general: {
+    defaultLabelQty: number;
   };
 
   ui: {
@@ -103,11 +102,10 @@ export type AppConfig = {
       productsEndpoint: string;
       intervalMinutes: number;
       lastSyncAt: string | null;
-      printerId: string;        // <-- EINZIGES Feld (auth token = printerId)
+      printerId: string; // auth token = printerId
     };
   };
 };
-
 
 /* -------------------------------------------------------
  * Default Config – wird beim ersten Start erzeugt
@@ -118,19 +116,22 @@ const DEFAULT_CONFIG: AppConfig = {
 
   network: {
     deviceIpConfig: "",
-    printerIp: ""
+    printerIp: "",
   },
 
   printer: {
-    defaultCopies: 1,
     labelTemplate: "standard-v1",
     dpi: 203,
-    rotate: 0
+    rotate: 0,
+  },
+
+  general: {
+    defaultLabelQty: 1000,
   },
 
   ui: {
     language: "de",
-    theme: "light"
+    theme: "light",
   },
 
   sync: {
@@ -141,14 +142,14 @@ const DEFAULT_CONFIG: AppConfig = {
       productsEndpoint: "/products",
       intervalMinutes: 60,
       lastSyncAt: null,
-      printerId: ""        // wichtig
-    }
-  }
+      printerId: "",
+    },
+  },
 };
-
 
 /* -------------------------------------------------------
  * migrateConfig – ergänzt fehlende Felder automatisch
+ *  + Migration von legacy printer.defaultLabelQty
  * ----------------------------------------------------- */
 
 function migrateConfig(raw: any): AppConfig {
@@ -157,27 +158,43 @@ function migrateConfig(raw: any): AppConfig {
     ...raw,
     network: {
       ...DEFAULT_CONFIG.network,
-      ...(raw.network || {})
+      ...(raw.network || {}),
     },
     printer: {
       ...DEFAULT_CONFIG.printer,
-      ...(raw.printer || {})
+      ...(raw.printer || {}),
+    },
+    general: {
+      ...DEFAULT_CONFIG.general,
+      ...(raw.general || {}),
     },
     ui: {
       ...DEFAULT_CONFIG.ui,
-      ...(raw.ui || {})
+      ...(raw.ui || {}),
     },
     sync: {
       xano: {
         ...DEFAULT_CONFIG.sync.xano,
-        ...(raw.sync?.xano || {})
-      }
-    }
+        ...(raw.sync?.xano || {}),
+      },
+    },
   };
+
+  // Migration: wenn es noch ein altes printer.defaultLabelQty gibt,
+  // dieses nach general.defaultLabelQty übernehmen (falls general leer).
+  const legacyQty = raw?.printer?.defaultLabelQty;
+  if (
+    legacyQty !== undefined &&
+    (raw.general === undefined || raw.general.defaultLabelQty === undefined)
+  ) {
+    const n = Number(legacyQty);
+    if (Number.isFinite(n) && n > 0) {
+      cfg.general.defaultLabelQty = Math.floor(n);
+    }
+  }
 
   return cfg;
 }
-
 
 /* -------------------------------------------------------
  * Öffentliche Funktionen – Config
@@ -193,7 +210,6 @@ export async function getConfig(): Promise<AppConfig> {
 export async function saveConfig(next: AppConfig) {
   return writeJson("config.json", next);
 }
-
 
 /* -------------------------------------------------------
  * Produkte JSON
@@ -225,7 +241,6 @@ export async function saveProducts<T>(file: ProductsFile<T>) {
   return writeJson("products.json", file);
 }
 
-
 /* -------------------------------------------------------
  * Optional: Reset-Funktionen
  * ----------------------------------------------------- */
@@ -240,7 +255,7 @@ export async function resetProducts() {
     items: [],
     meta: {
       source: "local",
-      lastUpdatedAt: new Date().toISOString()
-    }
+      lastUpdatedAt: new Date().toISOString(),
+    },
   });
 }

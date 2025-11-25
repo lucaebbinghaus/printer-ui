@@ -32,13 +32,15 @@ export type PrinterStatus = {
 // Nodes, die wir überwachen (NodeIds aus UAExpert)
 // ------------------------------------------------------------------
 const WATCH_NODES = [
+  // I/O / Status
   { name: "ERROR", nodeId: "ns=3;i=10021", type: "error" as const },
   { name: "READY", nodeId: "ns=3;i=10027", type: "ready" as const },
-  // Weitere Nodes kannst du hier ergänzen:
-  // { name: "ENDPOS", nodeId: "ns=3;i=XXXXX", type: "generic" as const },
-  // { name: "FEEDON", nodeId: "ns=3;i=YYYYY", type: "generic" as const },
-];
 
+  // Interpreter / Job
+  { name: "ACTIVE", nodeId: "ns=3;i=10032", type: "generic" as const },
+  { name: "LABELS_TO_PRINT", nodeId: "ns=3;i=10038", type: "generic" as const },
+  { name: "ERROR_TEXT", nodeId: "ns=3;i=10049", type: "generic" as const },
+];
 // ------------------------------------------------------------------
 // interner Zustand + EventEmitter
 // ------------------------------------------------------------------
@@ -67,8 +69,11 @@ function mapBoolToLamp(
 ): LampStatus {
   if (type === "error") return val ? "error" : "ok";
   if (type === "ready") return val ? "ok" : "warning";
-  return val ? "ok" : "unknown";
+
+  // generic = reine Info-Signale → Status immer OK
+  return "ok";
 }
+
 
 function updateNode(name: string, val: any) {
   const def = WATCH_NODES.find((n) => n.name === name);
