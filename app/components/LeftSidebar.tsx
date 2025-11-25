@@ -1,9 +1,9 @@
-// app/components/LeftSidebar.tsx (oder wo die Datei liegt)
+// app/components/LeftSidebar.tsx (oder wo sie bei dir liegt)
 
-// WICHTIG: verhindert, dass Next die Sidebar in Prod statisch/cached rendert
+// WICHTIG: erzwingt Node-Runtime (damit fs erlaubt ist)
+export const runtime = "nodejs";
+// WICHTIG: erzwingt, dass diese RSC immer dynamisch gerendert wird
 export const dynamic = "force-dynamic";
-// alternativ oder zusätzlich möglich:
-// export const revalidate = 0;
 
 import { getSideNav } from "./sideNav";
 import ClientLeftSidebar from "./ClientLeftSidebar";
