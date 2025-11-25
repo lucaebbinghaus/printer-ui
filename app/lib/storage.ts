@@ -92,6 +92,7 @@ export type AppConfig = {
   ui: {
     language: string;
     theme: "light" | "dark";
+    startPresetId: string | null;   // <--- NEU
   };
 
   sync: {
@@ -132,14 +133,15 @@ const DEFAULT_CONFIG: AppConfig = {
   ui: {
     language: "de",
     theme: "light",
+    startPresetId: null,
   },
 
   sync: {
     xano: {
       enabled: false,
-      baseUrl: "",
+      baseUrl: "https://api.saf-tepasse.de/api:j-HmV1Vn",
       apiKey: "",
-      productsEndpoint: "/products",
+      productsEndpoint: "/printer_products",
       intervalMinutes: 60,
       lastSyncAt: null,
       printerId: "",

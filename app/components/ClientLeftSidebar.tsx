@@ -40,9 +40,10 @@ export default function ClientLeftSidebar({ sideNav }: { sideNav: any }) {
               className={[
                 "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium shadow-sm transition text-left",
                 active
-                  ? "bg-white border-gray-300 text-gray-900"
-                  : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50",
+                  ? "bg-gray-900 text-white"
+                  : "text-gray-700 hover:bg-gray-50",
               ].join(" ")}
+
             >
               {Icon ? <Icon className="h-4 w-4" /> : null}
               {item.label}

@@ -105,6 +105,24 @@ export async function startOpcUaWatcher(endpoint: string) {
 
   console.log("[OPC-UA Watcher] starting…", endpoint);
 
+  // Hilfsfunktion: macht OPC-UA Werte "frontend-freundlich"
+  function normalizeValue(raw: any): any {
+    if (raw && typeof raw === "object") {
+      // typischer LocalizedText: { text: "Fehler", locale: "de-DE" }
+      if ("text" in raw && typeof (raw as any).text === "string") {
+        return (raw as any).text;
+      }
+
+      // Fallback: andere Objekte wenigstens als JSON anzeigen
+      try {
+        return JSON.stringify(raw);
+      } catch {
+        return String(raw);
+      }
+    }
+    return raw;
+  }
+
   try {
     client = OPCUAClient.create({
       endpointMustExist: false,
@@ -137,7 +155,8 @@ export async function startOpcUaWatcher(endpoint: string) {
     dataValues.forEach((dv, idx) => {
       const def = WATCH_NODES[idx];
       const raw = dv.value?.value;
-      updateNode(def.name, raw);
+      const value = normalizeValue(raw);
+      updateNode(def.name, value);
     });
 
     emitStatus();
@@ -181,7 +200,9 @@ export async function startOpcUaWatcher(endpoint: string) {
 
       monitoredItem.on("changed", (dataValue) => {
         const raw = dataValue.value?.value;
-        updateNode(node.name, raw);
+        const value = normalizeValue(raw);
+
+        updateNode(node.name, value);
         lastStatus.connected = true;
         lastStatus.error = undefined;
         emitStatus();
@@ -194,6 +215,7 @@ export async function startOpcUaWatcher(endpoint: string) {
     emitStatus();
   }
 }
+
 
 // ------------------------------------------------------------------
 // Getter + Subscription für SSE

@@ -2,18 +2,30 @@
 
 import { useEffect, useState } from "react";
 import { Save, RefreshCcw, Info } from "lucide-react";
+import KeyboardInput from "@/app/components/KeyboardInput";
 
 type AppConfig = {
   general?: {
     defaultLabelQty?: number;
   };
+  ui?: {
+    startPresetId?: string | null;
+  };
 };
 
-export default function StatusPage() {
+type PresetSummary = {
+  id: string;
+  name: string;
+};
+
+export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   const [defaultLabelQty, setDefaultLabelQty] = useState<number>(1);
+  const [startPresetId, setStartPresetId] = useState<string | "">("");
+
+  const [presets, setPresets] = useState<PresetSummary[]>([]);
 
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -24,12 +36,26 @@ export default function StatusPage() {
     setSuccess(null);
 
     try {
-      const res = await fetch("/api/settings/config", { cache: "no-store" });
-      if (!res.ok) throw new Error();
-
-      const cfg: AppConfig = await res.json();
+      // Config laden
+      const resCfg = await fetch("/api/settings/config", { cache: "no-store" });
+      if (!resCfg.ok) throw new Error("config load failed");
+      const cfg: AppConfig = await resCfg.json();
 
       setDefaultLabelQty(Number(cfg.general?.defaultLabelQty ?? 1));
+      setStartPresetId((cfg.ui?.startPresetId as string) || "");
+
+      // Presets laden (für Dropdown)
+      try {
+        const resPresets = await fetch("/api/presets", { cache: "no-store" });
+        if (resPresets.ok) {
+          const list: PresetSummary[] = await resPresets.json();
+          setPresets(list);
+        } else {
+          console.warn("Presets load failed", await resPresets.text());
+        }
+      } catch (e) {
+        console.warn("Presets request failed", e);
+      }
     } catch {
       setError("Fehler beim Laden der Einstellungen.");
     } finally {
@@ -54,6 +80,9 @@ export default function StatusPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           general: { defaultLabelQty: qty },
+          ui: {
+            startPresetId: startPresetId || null,
+          },
         }),
       });
 
@@ -62,7 +91,7 @@ export default function StatusPage() {
         throw new Error(msg || "Speichern fehlgeschlagen");
       }
 
-      setSuccess("Quantity / Etikettenanzahl gespeichert.");
+      setSuccess("Einstellungen gespeichert.");
       setDefaultLabelQty(qty);
     } catch (e: any) {
       setError(e?.message || "Speichern fehlgeschlagen.");
@@ -91,16 +120,14 @@ export default function StatusPage() {
       <div className="flex items-start gap-2 p-3 bg-blue-50 text-blue-900 rounded-lg border border-blue-200 text-sm">
         <Info className="w-4 h-4 mt-0.5" />
         <p>
-          Hier kannst du die Standardanzahl der zu druckenden Etiketten
-          konfigurieren. Wird verwendet, wenn der Print-Request keine eigene{" "}
-          <code className="bg-blue-100 px-1 py-0.5 rounded text-[11px]">
-            qty
-          </code>{" "}
-          mitgibt.
+          Hier konfigurierst du die Standardanzahl der zu druckenden Etiketten
+          und das Start-Preset, das beim Öffnen der Labels-Ansicht automatisch
+          ausgewählt werden soll.
         </p>
       </div>
 
-      <section className="p-5 bg-white border border-gray-200 rounded-xl shadow-sm space-y-4">
+      <section className="p-5 bg-white border border-gray-200 rounded-xl shadow-sm space-y-5">
+        {/* Quantity */}
         <div>
           <label className="block text-sm font-medium mb-1 text-gray-700">
             Standard-Etiketten pro Druck (Quantity)
@@ -124,11 +151,32 @@ export default function StatusPage() {
             <code className="bg-gray-100 px-1 py-0.5 rounded text-[11px]">
               {"{{QTY}}"}
             </code>
-            ) als auch für{" "}
-            <code className="bg-gray-100 px-1 py-0.5 rounded text-[11px]">
-              ^PQ
-            </code>{" "}
-            verwendet.
+            ) als auch für <code>^PQ</code> verwendet, wenn der Request keine
+            eigene <code>qty</code> enthält.
+          </p>
+        </div>
+
+        {/* Start-Preset */}
+        <div>
+          <label className="block text-sm font-medium mb-1 text-gray-700">
+            Start-Preset für Labels
+          </label>
+          <select
+            value={startPresetId}
+            onChange={(e) => setStartPresetId(e.target.value)}
+            className="w-full max-w-xs border border-gray-200 px-3 py-2 rounded-lg text-sm bg-white"
+          >
+            <option value="">– Kein spezielles Start-Preset –</option>
+            {presets.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-gray-500">
+            Dieses Preset wird als Standard verwendet, wenn du die Labels-Ansicht
+            öffnest. Falls leer, wird z. B. das erste verfügbare Preset genutzt
+            (abhängig von deiner Labels-Seite).
           </p>
         </div>
 

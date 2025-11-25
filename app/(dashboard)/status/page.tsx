@@ -182,16 +182,7 @@ export default function StatusPage() {
         </button>
       </div>
 
-      {/* Info-Box */}
-      <div className="flex items-start gap-2 p-3 bg-blue-50 text-blue-900 rounded-lg border border-blue-200 text-sm">
-        <Info className="w-4 h-4 mt-0.5" />
-        <p>
-          Anzeige des aktuellen OPC-UA Status des Druckers (READY, ERROR,
-          JOBRDY, FEEDON, …) basierend auf der in der Konfiguration gesetzten
-          Printer-IP. Die Werte werden in Echtzeit über Server-Sent Events
-          aktualisiert.
-        </p>
-      </div>
+     
 
       {/* OPC-UA Verbindung */}
       <section className="p-5 bg-white border border-gray-200 rounded-xl shadow-sm space-y-3">
