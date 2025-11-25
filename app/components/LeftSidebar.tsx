@@ -1,9 +1,6 @@
-// app/components/LeftSidebar.tsx (oder wo sie bei dir liegt)
-
-// WICHTIG: erzwingt Node-Runtime (damit fs erlaubt ist)
 export const runtime = "nodejs";
-// WICHTIG: erzwingt, dass diese RSC immer dynamisch gerendert wird
-export const dynamic = "force-dynamic";
+export const dynamic = "force-dynamic"; 
+export const fetchCache = "force-no-store"; 
 
 import { getSideNav } from "./sideNav";
 import ClientLeftSidebar from "./ClientLeftSidebar";
