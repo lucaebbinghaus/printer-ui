@@ -18,6 +18,11 @@ function createWindow() {
 
   win.loadURL("http://localhost:3000");
 
+  win.webContents.on("did-finish-load", () => {
+    win.webContents.setZoomFactor(1.5);
+  });
+
+
   // Falls der Fokus manchmal fehlt:
   win.once("ready-to-show", () => {
     win.show();
