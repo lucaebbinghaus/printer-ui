@@ -1,7 +1,8 @@
 "use client";
-import KeyboardInput from "@/app/components/KeyboardInput";
 
+import KeyboardInput from "@/app/components/KeyboardInput";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Save,
   Download,
@@ -23,6 +24,8 @@ type XanoSettings = {
 };
 
 export default function SettingsPage() {
+  const router = useRouter();
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -96,6 +99,9 @@ export default function SettingsPage() {
 
       setSuccess("Xano-Einstellungen gespeichert.");
       await load();
+
+      // Falls SideNav serverseitige Daten nutzt, ebenfalls refreshen
+      router.refresh();
     } catch {
       setError("Speichern fehlgeschlagen.");
     } finally {
@@ -118,7 +124,11 @@ export default function SettingsPage() {
 
       const json = await res.json();
       setSyncResult(`Produkte abgerufen: ${json.count} Einträge.`);
+
       await load();
+
+      // WICHTIG: triggert RSC/Layout neu -> SideNav wird neu geladen
+      router.refresh();
     } catch (e: any) {
       setError(e?.message || "Produkt-Sync fehlgeschlagen.");
     } finally {
@@ -142,17 +152,16 @@ export default function SettingsPage() {
 
       <div className="flex items-start gap-2 p-3 bg-blue-50 text-blue-900 rounded-lg border border-blue-200 text-sm">
         <Info className="w-4 h-4 mt-0.5" />
-        <p>
-          Hier konfigurierst du den Xano-Sync. Printer ID ist dein auth_token.
-        </p>
+        <p>Hier konfigurierst du den Xano-Sync. Printer ID ist dein auth_token.</p>
       </div>
 
       <section className="p-5 bg-white border border-gray-200 rounded-xl shadow-sm space-y-4">
-
         {/* Enabled toggle */}
         <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
           <div>
-            <div className="text-sm font-medium text-gray-800">Xano Sync aktiv</div>
+            <div className="text-sm font-medium text-gray-800">
+              Xano Sync aktiv
+            </div>
             <div className="text-xs text-gray-500">
               Wenn deaktiviert, wird kein Produktabruf durchgeführt.
             </div>
@@ -160,7 +169,9 @@ export default function SettingsPage() {
           <button
             onClick={() => {
               setEnabled((v) => !v);
-              setSuccess(null); setError(null); setSyncResult(null);
+              setSuccess(null);
+              setError(null);
+              setSyncResult(null);
             }}
             className="inline-flex items-center gap-2 rounded-lg bg-white border border-gray-200 px-3 py-2 text-sm shadow-sm hover:bg-gray-50"
             aria-label="Toggle Xano sync"
@@ -195,7 +206,6 @@ export default function SettingsPage() {
             className="w-full border border-gray-200 px-3 py-2 rounded-lg bg-white text-sm"
             placeholder="https://api.saf-tepasse.de/api:..."
           />
-
           <p className="mt-1 text-xs text-gray-500">
             Beispiel: https://api.saf-tepasse.de/api:j-HmV1Vn
           </p>
@@ -210,7 +220,9 @@ export default function SettingsPage() {
             value={productsEndpoint}
             onValueChange={(v) => {
               setProductsEndpoint(v);
-              setSuccess(null); setError(null); setSyncResult(null);
+              setSuccess(null);
+              setError(null);
+              setSyncResult(null);
             }}
             className="w-full border border-gray-200 px-3 py-2 rounded-lg bg-white text-sm"
             placeholder="/printer_products"
@@ -219,26 +231,6 @@ export default function SettingsPage() {
             Wird an die Base URL gehängt.
           </p>
         </div>
-
-        {/*
-
-       
-        <div>
-          <label className="block text-sm font-medium mb-1 text-gray-700">
-            Sync Intervall (Minuten)
-          </label>
-          <input
-            type="number"
-            min={1}
-            value={intervalMinutes}
-            onChange={(e) => {
-              setIntervalMinutes(Number(e.target.value || 0));
-              setSuccess(null); setError(null); setSyncResult(null);
-            }}
-            className="w-full border border-gray-200 px-3 py-2 rounded-lg bg-white text-sm"
-          />
-        </div>
-        */}
 
         {/* Printer ID */}
         <div>
@@ -251,30 +243,15 @@ export default function SettingsPage() {
               value={printerId}
               onValueChange={(v) => {
                 setPrinterId(v);
-                setSuccess(null); setError(null); setSyncResult(null);
+                setSuccess(null);
+                setError(null);
+                setSyncResult(null);
               }}
               className="w-full bg-transparent text-sm outline-none"
               placeholder="He1NDNzs4nWQC2uS86KC1CXaOxMtx2..."
             />
           </div>
         </div>
-
-        {/* API Key (optional) 
-        <div>
-          <label className="block text-sm font-medium mb-1 text-gray-700">
-            API Key (optional)
-          </label>
-          <input
-            value={apiKey}
-            onChange={(e) => {
-              setApiKey(e.target.value);
-              setSuccess(null); setError(null); setSyncResult(null);
-            }}
-            className="w-full border border-gray-200 px-3 py-2 rounded-lg bg-white text-sm"
-            placeholder="falls Xano Authorization braucht"
-          />
-        </div>
-        */}
 
         {/* Buttons */}
         <div className="flex gap-2">
@@ -287,8 +264,6 @@ export default function SettingsPage() {
             {saving ? "Speichern..." : "Speichern"}
           </button>
 
-
-
           <button
             onClick={syncProducts}
             disabled={syncing}
@@ -297,7 +272,6 @@ export default function SettingsPage() {
             <Download className="w-4 h-4" />
             {syncing ? "Abrufen..." : "Produkte abrufen"}
           </button>
-
         </div>
 
         {/* Status */}
