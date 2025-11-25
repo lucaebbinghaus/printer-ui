@@ -1,3 +1,6 @@
 [submodule "cab-opcua"]
 	path = cab-opcua
 	url = https://github.com/cab-product-marking/opcua_client.git
+[submodule "opcua_client"]
+	path = opcua_client
+	url = https://github.com/cab-product-marking/opcua_client.git

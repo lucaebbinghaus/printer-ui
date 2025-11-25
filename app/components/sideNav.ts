@@ -50,7 +50,8 @@ export async function getSideNav(): Promise<{
   return {
     labels,
     status: [
-      { key: "overview", label: "Drucker", href: "/status", icon: "Activity" },
+      { key: "general", label: "Allgemein", href: "/status", icon: "Sliders" }
+
     ],
     settings: [
       { key: "general", label: "Allgemein", href: "/settings", icon: "Sliders" },
