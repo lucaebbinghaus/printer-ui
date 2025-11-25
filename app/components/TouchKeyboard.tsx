@@ -65,7 +65,7 @@ export default function TouchKeyboard({ value, onKeyPress, onEnter }: TouchKeybo
   };
 
   return (
-    <div className="w-full max-w-3xl mx-auto rounded-xl shadow-lg p-2 bg-white">
+    <div className="w-2/3 mx-auto rounded-xl shadow-lg p-2 bg-white">
       <Keyboard
         keyboardRef={r => (keyboardRef.current = r)}
         layout={layout}

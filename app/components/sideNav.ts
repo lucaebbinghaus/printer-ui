@@ -50,6 +50,7 @@ export async function getSideNav(): Promise<{
   settings: NavItem[];
 }> {
   const presets = await getProducts();
+  console.log("SideNav presets", presets.length); // nur zum Testen
 
   const labels: NavItem[] = presets
     .filter(p => p.enabled) // nur aktive Presets
@@ -63,9 +64,7 @@ export async function getSideNav(): Promise<{
   return {
     labels,
     status: [
-      { key: "overview", label: "Übersicht", href: "/status", icon: "Activity" },
-      { key: "motors", label: "Motoren", href: "/status/motors", icon: "Cpu" },
-      { key: "sensors", label: "Sensoren", href: "/status/sensors", icon: "Wrench" },
+      { key: "overview", label: "Drucker", href: "/status", icon: "Activity" }
     ],
     settings: [
       { key: "general", label: "Allgemein", href: "/settings", icon: "Sliders" },
