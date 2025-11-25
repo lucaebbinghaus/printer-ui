@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { NAV_ITEMS } from "./nav";
-import { ArrowLeft, Maximize2 } from "lucide-react";
+import { ArrowLeft, RotateCcw } from "lucide-react";
 
 export default function TopBar() {
   const pathname = usePathname();
@@ -15,18 +15,7 @@ export default function TopBar() {
         {/* LEFT: Back + Tabs in one continuous pill bar */}
         <div className="flex items-center">
 
-          {/* Shared container with white background */}
           <div className="flex items-center bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-
-            {/*
-            <button
-              onClick={() => router.back()}
-              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 active:scale-[0.98] border-r border-gray-200"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back
-            </button>
-            */}
 
             {/* Tabs */}
             <nav className="flex items-center">
@@ -60,17 +49,16 @@ export default function TopBar() {
           </div>
         </div>
 
-        {/* RIGHT: Fullscreen button */}
+        {/* RIGHT: Refresh button */}
         <button
-          aria-label="Fullscreen"
+          aria-label="Refresh"
           className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 shadow-sm transition hover:bg-gray-50 active:scale-[0.98]"
           onClick={() => {
-            const el = document.documentElement;
-            if (!document.fullscreenElement) el.requestFullscreen?.();
-            else document.exitFullscreen?.();
+            // Next.js App Router Refresh → triggert Server Components neu
+            router.refresh();
           }}
         >
-          <Maximize2 className="h-4 w-4" />
+          <RotateCcw className="h-4 w-4" />
         </button>
 
       </div>

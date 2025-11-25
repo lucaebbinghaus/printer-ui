@@ -11,7 +11,7 @@ type NavItem = {
 };
 
 /**
- * Wird von z.B. /labels/[presetId]/page.tsx importiert.
+ * Von /labels/[presetId]/page.tsx genutzt:
  * Liefert alle Presets aus products.json.
  */
 export async function getProducts(): Promise<Preset[]> {
@@ -21,7 +21,8 @@ export async function getProducts(): Promise<Preset[]> {
 }
 
 /**
- * Wird von LeftSidebar benutzt, um die Navigation zu bauen.
+ * Von LeftSidebar genutzt:
+ * Baut die Navigation (Labels / Status / Settings).
  */
 export async function getSideNav(): Promise<{
   labels: NavItem[];
@@ -30,16 +31,21 @@ export async function getSideNav(): Promise<{
 }> {
   const presets: Preset[] = await readProducts();
 
-  console.log("[getSideNav] presets:", presets.length);
+  console.log("[getSideNav] presets gesamt:", presets.length);
 
-  const labels: NavItem[] = presets
-    .filter((p) => p.enabled)
-    .map((p) => ({
-      key: String(p.id),
-      label: p.name,
-      href: `/labels/${p.id}`,
-      icon: "Tag",
-    }));
+  // WICHTIG:
+  // Viele APIs haben kein "enabled"-Feld → dann wären alle weg.
+  // Deshalb: alles anzeigen, außer wenn enabled explizit false ist.
+  const enabledPresets = presets.filter((p) => (p as any).enabled !== false);
+
+  console.log("[getSideNav] presets nach Filter:", enabledPresets.length);
+
+  const labels: NavItem[] = enabledPresets.map((p) => ({
+    key: String(p.id),
+    label: p.name,
+    href: `/labels/${p.id}`,
+    icon: "Tag",
+  }));
 
   return {
     labels,
