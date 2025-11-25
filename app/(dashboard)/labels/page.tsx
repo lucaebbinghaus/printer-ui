@@ -1,17 +1,8 @@
-import ButtonGrid from "@/app/components/ButtonGrid";
-import { GET as getButtonsApi } from "@/app/api/buttons/route";
-import { redirect } from "next/navigation";
-
-
-export default async function Page() {
-  const res = await getButtonsApi();
-  const buttons = await res.json();
-
+export default function StatusPage() {
   return (
-    <div className="min-h-full bg-transparent">
-      <main className="pb-10">
-        <ButtonGrid buttons={buttons} />
-      </main>
+    <div className="space-y-2">
+      <h1 className="text-xl font-semibold">Labels</h1>
+      <p className="text-gray-600"></p>
     </div>
   );
 }

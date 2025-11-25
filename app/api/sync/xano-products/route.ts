@@ -25,16 +25,8 @@ export async function POST() {
 
     // --- WÄHLE GENAU EINE VARIANTE ---
     // Variante A (Query Param)
-    const urlA = `${base}${endpoint}?printerId=${encodeURIComponent(printerId)}`;
+    const url = `${base}${endpoint}?printerId=${encodeURIComponent(printerId)}`;
 
-    // Variante B (anderer Param-Name)
-    const urlB = `${base}${endpoint}?auth_token=${encodeURIComponent(printerId)}`;
-
-    // Variante C (Pfad)
-    const urlC = `${base}/printers/${encodeURIComponent(printerId)}${endpoint}`;
-
-    // HIER die richtige URL auswählen:
-    const url = urlA; // <-- wenn Fehler: urlB oder urlC probieren
 
     console.log("Xano sync URL:", url);
 
