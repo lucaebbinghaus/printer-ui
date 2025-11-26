@@ -1,18 +1,15 @@
 // app/api/presets/[presetId]/route.ts
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getProducts } from "@/app/lib/storage";
 
 export const runtime = "nodejs";
 
-type Params = {
-  params: {
-    presetId: string;
-  };
-};
-
-export async function GET(_req: Request, { params }: Params) {
+export async function GET(
+  _req: NextRequest,
+  context: { params: Promise<{ presetId: string }> }
+) {
   try {
-    const { presetId } = params;
+    const { presetId } = await context.params;
 
     const file = await getProducts<any>();
     const items: any[] = file.items || [];
