@@ -18,6 +18,7 @@ export async function POST(req: Request) {
       art_number,
       mhd,
       qty,
+      description,
     } = body;
 
     if (!art_number || !name) {
@@ -48,12 +49,12 @@ export async function POST(req: Request) {
       mhd: String(mhd ?? ""),
       ingredientsHtml: html,
       barcodeData,
+      description,
     });
 
     const dataBase64 = Buffer.from(labelHtml, "utf8").toString("base64");
 
     const zplboxUrl = process.env.ZPLBOX_URL ?? "http://localhost:8080";
-
 
     // Variante: HTML -> ZPL -> direkt zum Drucker
     const res = await fetch(
@@ -62,9 +63,9 @@ export async function POST(req: Request) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          widthPts: 480,
-          heightPts: 240,
-          orientation: "Rotate0",
+          widthPts: 945,
+          heightPts: 800,
+          orientation: "Rotate90",
           dataBase64,
         }),
       }

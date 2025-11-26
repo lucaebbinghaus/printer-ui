@@ -7,11 +7,24 @@ export function buildLabelHtml(opts: {
   mhd: string;
   ingredientsHtml: string; // Richtext mit <strong>, <u>, ...
   barcodeData: string;     // EAN/GS1-128 String
+  description: string;
 }) {
-  const { name, artNumber, weight, mhd, ingredientsHtml, barcodeData } = opts;
+  const {
+    name,
+    artNumber,
+    weight,
+    mhd,
+    ingredientsHtml,
+    barcodeData,
+    description,
+  } = opts;
 
-  // barcodeData sicher in JS einbauen
   const barcodeJsLiteral = JSON.stringify(barcodeData);
+
+  const safeDescription = (description || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 
   return /* html */ `<!DOCTYPE html>
 <html lang="de">
@@ -20,102 +33,118 @@ export function buildLabelHtml(opts: {
   <title>Label</title>
 
   <style>
-    /* Canvas-Größe: 60×30 mm @ 203 dpi ≈ 480×240 Pixel */
-    body {
-      margin: 0;
-      padding: 0;
-      background: #eee;
-      display: flex;
-      justify-content: center;
-      align-items: flex-start;
-      font-family: Arial, sans-serif;
-    }
+  /* Canvas-Größe: 945 × 650 px */
+  body {
+    margin: 0;
+    padding: 0;
+    background: #eee;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    font-family: Arial, sans-serif;
+  }
 
-    .preview-wrapper {
-      padding: 20px;
-    }
+  .preview-wrapper {
+    padding: 0;
+  }
 
-    /* Tatsächliches Label */
-    .label {
-      width: 480px;
-      height: 240px;
-      background: white;
-      padding: 12px;
-      box-sizing: border-box;
-      display: flex;
-      flex-direction: column;
-      border: 1px solid #ccc;
-    }
+  .label {
+    width: 945px;
+    height: 680px;
+    background: white;
+    padding: 24px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid #ccc;
+  }
 
-    .header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      margin-bottom: 4px;
-    }
+  /* HEADER-BEREICH */
 
-    .name {
-      font-size: 20px;
-      font-weight: bold;
-      line-height: 1.1;
-      max-width: 60%;
-    }
+  .header {
+    width: 100%;
+    margin-bottom: 16px;
+  }
 
-    .art-number {
-      font-size: 11px;
-      text-align: right;
-      white-space: nowrap;
-      margin-left: 8px;
-    }
+  .title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    width: 100%;
+  }
 
-    .meta {
-      display: flex;
-      justify-content: space-between;
-      font-size: 11px;
-      margin-top: 2px;
-      margin-bottom: 4px;
-    }
+  .name {
+    font-size: 35px;
+    font-weight: bold;
+    line-height: 1.1;
+    max-width: 70%;   /* falls Name lang ist */
+  }
 
-    .zutaten-label {
-      font-weight: bold;
-      margin-top: 4px;
-      margin-bottom: 2px;
-      font-size: 11px;
-    }
+  .art-number {
+    font-size: 24px;
+    white-space: nowrap;
+    text-align: right;
+    margin-left: 12px;
+  }
 
-    .zutaten {
-      font-size: 10px;
-      line-height: 1.25;
-      overflow: hidden;
-      flex-grow: 1;
-      margin-bottom: 4px;
-    }
+  .description {
+    font-size: 22px;
+    line-height: 1.3;
+    margin-top: 10px;
+    width: 100%;      /* volle Breite */
+    color: #222;
+  }
 
-    .barcode-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-end;
-      margin-top: 4px;
-    }
+  /* META-ZEILE */
 
-    .barcode-box {
-      flex: 1;
-      margin-right: 8px;
-    }
+  .meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 22px;
+    margin-top: 4px;
+    margin-bottom: 16px;
+  }
 
-    #barcode {
-      width: 100%;
-      height: 70px;
-    }
+  .zutaten-label {
+    font-weight: bold;
+    margin-top: 8px;
+    margin-bottom: 4px;
+    font-size: 22px;
+  }
 
-    .footer {
-      font-size: 9px;
-      line-height: 1.2;
-      margin-top: 4px;
-    }
+  .zutaten {
+    font-size: 20px;
+    line-height: 1.35;
+    flex-grow: 1;
+    margin-bottom: 16px;
+  }
+
+  /* FOOTER MIT TEXT LINKS + BARCODE RECHTS */
+
+  .footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: top;
+    gap: 24px;
+    margin-top: 8px;
+  }
+
+  .footer-text {
+    font-size: 18px;
+    line-height: 1.4;
+    flex: 1;
+  }
+
+  .footer-barcode {
+    width: 40%;        /* ggf. 30–50 % je nach Platz */
+  }
+
+  #barcode {
+    width: 100%;
+    height: 110px;
+  }
   </style>
 
-  <!-- JsBarcode über CDN -->
   <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 </head>
 
@@ -124,16 +153,20 @@ export function buildLabelHtml(opts: {
     <div class="label">
 
       <div class="header">
-        <div class="name">${name}</div>
-        <div class="art-number">
-          Art.-Nr.: ${artNumber}<br>
-          ${weight}
+        <div class="title-row">
+          <div class="name">${name}</div>
+          <div class="art-number">Art.-Nr.: ${artNumber}</div>
         </div>
+        ${
+          safeDescription
+            ? `<div class="description">${safeDescription}</div>`
+            : ""
+        }
       </div>
 
       <div class="meta">
         <div>Mindestens haltbar bis: <strong>${mhd}</strong></div>
-        <div>- verzehrfertig -</div>
+        <div>verzehrfertig • <strong>${weight}</strong></div>
       </div>
 
       <div class="zutaten-label">Zutaten:</div>
@@ -142,17 +175,15 @@ export function buildLabelHtml(opts: {
         ${ingredientsHtml}
       </div>
 
-      <div class="barcode-row">
-        <div class="barcode-box">
-          <!-- GS1-128 / EAN-128 Barcode -->
+      <div class="footer">
+        <div class="footer-text">
+          SAF Tepasse GmbH &amp; Co. KG<br>
+          Wüppings Weide 6<br>
+          46395 Bocholt<br>
+        </div>
+        <div class="footer-barcode">
           <svg id="barcode"></svg>
         </div>
-      </div>
-
-      <div class="footer">
-        SAF Tepasse GmbH &amp; Co. KG<br>
-        Wüppings Weide 6 · 46395 Bocholt<br>
-        Bei +5°C bis +7°C lagern
       </div>
 
     </div>
@@ -166,10 +197,10 @@ export function buildLabelHtml(opts: {
         format: "CODE128",
         ean128: true,
         displayValue: true,
-        fontSize: 12,
-        textMargin: 2,
-        width: 1.2,
-        height: 60,
+        fontSize: 30,
+        textMargin: 4,
+        width: 4,
+        height: 110,
         margin: 0
       });
     });
