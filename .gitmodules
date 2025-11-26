@@ -4,3 +4,6 @@
 [submodule "opcua_client"]
 	path = opcua_client
 	url = https://github.com/cab-product-marking/opcua_client.git
+[submodule "zplbox"]
+	path = zplbox
+	url = https://github.com/ricebean-net/zplbox.git
