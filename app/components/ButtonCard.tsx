@@ -1,6 +1,15 @@
 // components/ButtonCard.tsx
-export type PrinterIngredient = { name: string; html: string; };
-export type PrinterComponent = { name: string; printer_ingredients_ids: PrinterIngredient[]; };
+
+export type PrinterIngredient = {
+  name: string;
+  html: string;
+};
+
+export type PrinterComponent = {
+  name: string;
+  printer_ingredients_ids: PrinterIngredient[];
+};
+
 export type PrinterProduct = {
   id: number;
   created_at: number;
@@ -9,6 +18,14 @@ export type PrinterProduct = {
   weight: number;
   art_number: string;
   mhd: number;
+
+  // Zusätzliche Eigenschaften, die ButtonGrid / Printing benötigen:
+  description?: string;
+
+  _addon_printer_product_diet_type?: {
+    name: string;
+    svg: string;
+  };
 };
 
 export default function ButtonCard({
@@ -32,11 +49,10 @@ export default function ButtonCard({
         active:scale-[0.985] transition
       "
     >
-      {/* Title */}
+      {/* Produktname */}
       <div className="text-sm font-semibold text-gray-900 line-clamp-2">
         {item.name}
       </div>
-
 
       {/* Bottom row */}
       <div className="absolute bottom-3 left-4 right-4 flex items-end justify-between">
@@ -48,15 +64,14 @@ export default function ButtonCard({
           <div className="text-xs font-semibold text-gray-900">
             {createdDate}
           </div>
+
           {item.art_number && (
-            <div className="text-xs text-gray-600">
-              {item.art_number}
-            </div>
+            <div className="text-xs text-gray-600">{item.art_number}</div>
           )}
         </div>
       </div>
 
-      {/* subtle hover highlight */}
+      {/* Hover highlight */}
       <div className="pointer-events-none absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition bg-gradient-to-b from-gray-50/40 to-transparent" />
     </button>
   );
