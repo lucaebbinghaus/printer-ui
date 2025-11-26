@@ -56,7 +56,7 @@ export async function POST(req: Request) {
 
     const dataBase64 = Buffer.from(labelHtml, "utf8").toString("base64");
 
-    const zplboxUrl = process.env.ZPLBOX_URL ?? "http://localhost:8080";
+    const zplboxUrl = process.env.ZPLBOX_URL ?? "http://zplbox:8080";
 
     // Variante: HTML -> ZPL -> direkt zum Drucker
     const res = await fetch(

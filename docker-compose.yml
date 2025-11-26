@@ -1,25 +1,30 @@
+version: "3.9"
+
 services:
   printer-ui:
-    build: .
     image: printer-ui:local
+    # oder build:, je nachdem wie du das UI baust
     container_name: printer-ui
-    restart: unless-stopped
     ports:
       - "3000:3000"
-    environment:
-      - APP_DATA_DIR=/data
-      - ZPLBOX_URL=http://zplbox:8080
-    volumes:
-      - printer-ui-data:/data
     depends_on:
       - zplbox
+    environment:   # <-- so muss es heißen
+      - ZPLBOX_URL=http://zplbox:8080
 
   zplbox:
-    image: ghcr.io/ricebean-net/zplbox:latest
+    # Variante A: das bereits gebaute Image nutzen
+    image: zplbox:local
+
+    # Variante B (empfohlen, dann baut Compose bei Bedarf selbst):
+    # build:
+    #   context: ./zplbox
+    #   dockerfile: Dockerfile
+    #   args:
+    #     VERSION: "1.0.0"
+    # image: zplbox:local
+
     container_name: zplbox
+    restart: unless-stopped
     ports:
       - "8080:8080"
-    restart: unless-stopped
-
-volumes:
-  printer-ui-data:
