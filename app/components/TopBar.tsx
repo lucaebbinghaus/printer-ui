@@ -1,17 +1,12 @@
+// components/TopBar.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { NAV_ITEMS } from "./nav";
 import { RotateCcw, OctagonX } from "lucide-react";
-import type { LampStatus, PrinterNode } from "@/app/lib/opcuaWatcher";
-
-type PrinterStatusResponse = {
-  connected: boolean;
-  endpoint: string | null;
-  nodes: PrinterNode[];
-  error?: string;
-};
+import type { LampStatus } from "@/app/lib/opcuaWatcher";
+import { usePrinterStatus } from "@/app/lib/usePrinterStatus";
 
 function StatusDot({ status }: { status: LampStatus }) {
   const map: Record<LampStatus, string> = {
@@ -25,72 +20,21 @@ function StatusDot({ status }: { status: LampStatus }) {
   );
 }
 
-function deriveOverallStatus(nodes: PrinterNode[]): LampStatus {
-  if (!nodes || nodes.length === 0) return "unknown";
-  if (nodes.some((n) => n.status === "error")) return "error";
-  if (nodes.some((n) => n.status === "warning")) return "warning";
-  if (nodes.every((n) => n.status === "ok")) return "ok";
-  return "unknown";
-}
-
 export default function TopBar() {
   const pathname = usePathname();
   const router = useRouter();
 
-  const [overallStatus, setOverallStatus] = useState<LampStatus>("unknown");
-  const [statusText, setStatusText] = useState("Status…");
+  const {
+    overallStatus,
+    connected,
+    isReady,
+    isActive,
+    labelsRemaining,
+    errorText,
+  } = usePrinterStatus();
+
   const [cancelling, setCancelling] = useState(false);
-
-  useEffect(() => {
-    let es: EventSource | null = new EventSource(
-      "/api/status/printer/stream"
-    );
-
-    const handleMessage = (ev: MessageEvent) => {
-      const data: PrinterStatusResponse = JSON.parse(ev.data);
-
-      if (!data.connected) {
-        setOverallStatus("error");
-        setStatusText("Nicht verbunden");
-        return;
-      }
-
-      const ovr = deriveOverallStatus(data.nodes || []);
-      setOverallStatus(ovr);
-
-      switch (ovr) {
-        case "ok":
-          setStatusText("Drucker OK");
-          break;
-        case "warning":
-          setStatusText("Warnung");
-          break;
-        case "error":
-          setStatusText("Fehler");
-          break;
-        default:
-          setStatusText("Unbekannt");
-      }
-    };
-
-    const handleError = () => {
-      setOverallStatus("error");
-      setStatusText("Verbindung unterbrochen");
-      es?.close();
-      setTimeout(() => {
-        es = new EventSource("/api/status/printer/stream");
-        es.onmessage = handleMessage;
-        es.onerror = handleError;
-      }, 3000);
-    };
-
-    es.onmessage = handleMessage;
-    es.onerror = handleError;
-
-    return () => {
-      es?.close();
-    };
-  }, []);
+  const [tempMessage, setTempMessage] = useState<string | null>(null);
 
   async function handleCancelJobs() {
     setCancelling(true);
@@ -104,21 +48,41 @@ export default function TopBar() {
       }
       const json = await res.json();
       console.log("Cancel result:", json);
-      // Kleines Feedback im Status-Text
-      setStatusText("Jobs abgebrochen");
-      setTimeout(() => {
-        // nach kurzer Zeit wieder normalen Status anzeigen lassen (SSE aktualisiert sowieso)
-        setStatusText((prev) =>
-          prev === "Jobs abgebrochen" ? "Drucker OK" : prev
-        );
-      }, 3000);
+
+      setTempMessage("Alle Druckjobs wurden abgebrochen.");
+      setTimeout(() => setTempMessage(null), 4000);
     } catch (e) {
       console.error(e);
-      setStatusText("Abbruch-Fehler");
+      setTempMessage("Fehler beim Abbrechen der Jobs.");
+      setTimeout(() => setTempMessage(null), 4000);
     } finally {
       setCancelling(false);
     }
   }
+
+  // zweite Zeile im Chip
+  const secondaryLine = (() => {
+    if (tempMessage) return tempMessage;
+    if (!connected) return "Keine Verbindung zum Drucker.";
+    if (errorText) return `Fehler: ${errorText}`;
+    if (!isReady) return "Drucker nicht bereit.";
+    if (isActive) {
+      if (typeof labelsRemaining === "number") {
+        return `Druck läuft – noch ${labelsRemaining} Etikett${
+          labelsRemaining === 1 ? "" : "en"
+        }`;
+      }
+      return "Druck läuft …";
+    }
+    return "Bereit für neuen Druckauftrag.";
+  })();
+
+  // erste Zeile (kurz)
+  const primaryLine = (() => {
+    if (!connected) return "Drucker nicht verbunden";
+    if (!isReady) return "Drucker nicht bereit";
+    return "Drucker bereit";
+  })();
 
   return (
     <header className="w-full bg-[#efefef] border-b border-gray-200">
@@ -156,16 +120,22 @@ export default function TopBar() {
 
         {/* Right: Status + Cancel + Refresh */}
         <div className="flex items-center gap-3">
-          <div className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1 text-xs text-gray-700 shadow-sm">
-            <StatusDot status={overallStatus} />
-            <span>{statusText}</span>
+          {/* Status-Chip */}
+          <div className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1 text-xs text-gray-700 shadow-sm max-w-xs">
+            <StatusDot status={connected ? overallStatus : "error"} />
+            <div className="flex flex-col leading-tight overflow-hidden">
+              <span className="font-medium truncate">{primaryLine}</span>
+              <span className="text-[11px] text-gray-500 truncate">
+                {secondaryLine}
+              </span>
+            </div>
           </div>
 
           {/* Cancel Button */}
           <button
             aria-label="Alle Druckjobs abbrechen"
             title="Alle Druckjobs abbrechen (TotalCancel)"
-            disabled={cancelling}
+            disabled={cancelling || !connected}
             className="inline-flex h-9 w-20 items-center justify-center rounded-lg border border-red-200 bg-white text-red-600 shadow-sm hover:bg-red-50 active:scale-[0.98] disabled:opacity-60"
             onClick={handleCancelJobs}
           >

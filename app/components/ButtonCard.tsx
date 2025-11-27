@@ -18,36 +18,53 @@ export type PrinterProduct = {
   weight: number;
   art_number: string;
   mhd: number;
-
-  // Zusätzliche Eigenschaften, die ButtonGrid / Printing benötigen:
   description?: string;
-
   _addon_printer_product_diet_type?: {
     name: string;
     svg: string;
   };
 };
 
+type ButtonCardProps = {
+  item: PrinterProduct;
+  onClick?: () => void;
+  disabled?: boolean;
+  isPrinting?: boolean;
+};
+
 export default function ButtonCard({
   item,
   onClick,
-}: {
-  item: PrinterProduct;
-  onClick?: () => void;
-}) {
+  disabled = false,
+  isPrinting = false,
+}: ButtonCardProps) {
   const createdDate = new Date(item.created_at).toLocaleDateString("de-DE");
+
+  const baseClasses = `
+    flex
+    group relative h-44 w-full rounded-xl border bg-white
+    p-4 text-left shadow-sm
+    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/10
+    active:scale-[0.985] transition
+  `;
+
+  const enabledStyles = `
+    border-gray-200
+    hover:border-gray-300 hover:shadow-md
+  `;
+
+  const disabledStyles = `
+    border-gray-200
+    opacity-60 cursor-not-allowed
+  `;
 
   return (
     <button
-      onClick={onClick}
-      className="
-        flex
-        group relative h-44 w-full rounded-xl border border-gray-200 bg-white
-        p-4 text-left shadow-sm
-        hover:border-gray-300 hover:shadow-md
-        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/10
-        active:scale-[0.985] transition
-      "
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
+      className={[baseClasses, disabled ? disabledStyles : enabledStyles].join(
+        " "
+      )}
     >
       {/* Produktname */}
       <div className="text-sm font-semibold text-gray-900 line-clamp-2">
@@ -73,6 +90,16 @@ export default function ButtonCard({
 
       {/* Hover highlight */}
       <div className="pointer-events-none absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition bg-gradient-to-b from-gray-50/40 to-transparent" />
+
+      {/* Overlay bei aktivem Job */}
+      {isPrinting && (
+        <div className="pointer-events-none absolute inset-0 rounded-xl bg-white/70 backdrop-blur-[1px] flex items-center justify-center">
+          <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-800 border border-blue-200 shadow-sm">
+            <span className="inline-block h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
+            <span>Druckauftrag läuft …</span>
+          </div>
+        </div>
+      )}
     </button>
   );
 }
