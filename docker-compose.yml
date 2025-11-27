@@ -1,5 +1,8 @@
 services:
   printer-ui:
+    build:
+      context: .
+      dockerfile: Dockerfile
     image: printer-ui:local
     container_name: printer-ui
     ports:

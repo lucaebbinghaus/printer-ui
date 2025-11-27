@@ -144,7 +144,7 @@ const DEFAULT_CONFIG: AppConfig = {
       productsEndpoint: "/printer_products",
       intervalMinutes: 60,
       lastSyncAt: null,
-      printerId: "",
+      printerId: "He1NDNzs4nWQC2uS86KC1CXaOxMtx2",
     },
   },
 };
