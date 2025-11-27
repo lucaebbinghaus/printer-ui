@@ -1,4 +1,5 @@
 // components/ButtonCard.tsx
+import { Loader2 } from "lucide-react";
 
 export type PrinterIngredient = {
   name: string;
@@ -29,7 +30,8 @@ type ButtonCardProps = {
   item: PrinterProduct;
   onClick?: () => void;
   disabled?: boolean;
-  isPrinting?: boolean;
+  isPrinting?: boolean; // OPC-UA ACTIVE
+  isSending?: boolean;  // fetch läuft
 };
 
 export default function ButtonCard({
@@ -37,6 +39,7 @@ export default function ButtonCard({
   onClick,
   disabled = false,
   isPrinting = false,
+  isSending = false,
 }: ButtonCardProps) {
   const createdDate = new Date(item.created_at).toLocaleDateString("de-DE");
 
@@ -58,13 +61,16 @@ export default function ButtonCard({
     opacity-60 cursor-not-allowed
   `;
 
+  const isBlocked = disabled || isSending || isPrinting;
+
   return (
     <button
-      onClick={disabled ? undefined : onClick}
-      disabled={disabled}
-      className={[baseClasses, disabled ? disabledStyles : enabledStyles].join(
-        " "
-      )}
+      onClick={isBlocked ? undefined : onClick}
+      disabled={isBlocked}
+      className={[
+        baseClasses,
+        isBlocked ? disabledStyles : enabledStyles,
+      ].join(" ")}
     >
       {/* Produktname */}
       <div className="text-sm font-semibold text-gray-900 line-clamp-2">
@@ -88,8 +94,20 @@ export default function ButtonCard({
         </div>
       </div>
 
-      {/* Hover highlight */}
-      <div className="pointer-events-none absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition bg-gradient-to-b from-gray-50/40 to-transparent" />
+      {/* Hover highlight (nur wenn nicht geblockt) */}
+      {!isBlocked && (
+        <div className="pointer-events-none absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition bg-gradient-to-b from-gray-50/40 to-transparent" />
+      )}
+
+      {/* Loader beim Senden */}
+      {isSending && (
+        <div className="pointer-events-none absolute inset-0 rounded-xl bg-white/75 backdrop-blur-[2px] flex items-center justify-center">
+          <div className="flex items-center gap-2 text-gray-700 text-xs font-medium">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Wird gesendet …
+          </div>
+        </div>
+      )}
 
       {/* Overlay bei aktivem Job */}
       {isPrinting && (

@@ -17,12 +17,15 @@ function buildIngredientsHtml(product: PrinterProduct) {
 export default function ButtonGrid({ buttons }: { buttons: PrinterProduct[] }) {
   const { connected, isReady, isActive } = usePrinterStatus();
 
-  // Welches Produkt wurde von *dieser* Session gestartet?
+  // ID des Jobs, der gerade an /api/print gesendet wird
+  const [sendingJobId, setSendingJobId] = useState<number | null>(null);
+  // ID des Jobs, der aktuell laut UI als "laufend" gilt
   const [currentJobId, setCurrentJobId] = useState<number | null>(null);
 
-  // Wenn der Drucker laut OPC-UA nicht mehr aktiv ist → Overlay entfernen
+  // Wenn der Drucker nicht mehr aktiv ist, alle UI-States zurücksetzen
   useEffect(() => {
     if (!isActive) {
+      setSendingJobId(null);
       setCurrentJobId(null);
     }
   }, [isActive]);
@@ -34,26 +37,28 @@ export default function ButtonGrid({ buttons }: { buttons: PrinterProduct[] }) {
     }
 
     if (!isReady) {
-      alert("Der Drucker ist nicht bereit (READY-Signal ist aus).");
+      alert("Der Drucker ist nicht bereit. Bitte Status prüfen.");
       return;
     }
 
     if (isActive) {
-      alert("Es läuft bereits ein Druckauftrag. Bitte warte, bis dieser fertig ist.");
+      alert(
+        "Es läuft bereits ein Druckauftrag. Bitte warte, bis dieser abgeschlossen ist."
+      );
       return;
     }
 
-    // Diesen Job als „aktuellen“ markieren
-    setCurrentJobId(product.id);
+    // Loader für diesen Button aktivieren
+    setSendingJobId(product.id);
 
     const html = buildIngredientsHtml(product);
     console.log("INGREDIENTS HTML FRONTEND:", html);
 
     const weightWithG = `${Number(product.weight ?? 0)}g`;
     const mhdDays = Number(product.mhd ?? 0);
-    const mhdDate = new Date(Date.now() + mhdDays * 86400000).toLocaleDateString(
-      "de-DE"
-    );
+    const mhdDate = new Date(
+      Date.now() + mhdDays * 86400000
+    ).toLocaleDateString("de-DE");
 
     await fetch("/api/print", {
       method: "POST",
@@ -69,10 +74,15 @@ export default function ButtonGrid({ buttons }: { buttons: PrinterProduct[] }) {
         dietTypeSvg: product?._addon_printer_product_diet_type?.svg ?? null,
       }),
     });
+
+    // Request wurde gesendet – jetzt warten wir darauf,
+    // dass OPC-UA ACTIVE meldet; bis dahin bleibt "Wird gesendet …"
+    setCurrentJobId(product.id);
   }
 
-  // Global: Ob überhaupt neue Jobs angenommen werden
-  const printingBlocked = !connected || !isReady || isActive;
+  // Global: dürfen neue Jobs angenommen werden?
+  const printingBlocked =
+    !connected || !isReady || isActive || sendingJobId !== null;
 
   return (
     <section className="mt-8 w-full max-w-7xl px-2 sm:px-4">
@@ -92,9 +102,9 @@ export default function ButtonGrid({ buttons }: { buttons: PrinterProduct[] }) {
             item={b}
             onClick={() => handlePrint(b)}
             disabled={printingBlocked}
-            // Overlay NUR wenn:
-            // - dieser Button das aktuelle Produkt ist
-            // - und der Drucker laut OPC-UA wirklich aktiv ist
+            // Loader nur auf dem Button, der gerade sendet
+            isSending={sendingJobId === b.id && !isActive}
+            // „Druckauftrag läuft …“ nur auf dem Button, dessen Job läuft
             isPrinting={currentJobId === b.id && isActive}
           />
         ))}

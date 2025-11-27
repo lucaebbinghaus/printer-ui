@@ -1,4 +1,3 @@
-// app/lib/opcuaWatcher.ts
 import {
   OPCUAClient,
   ClientSession,
@@ -41,6 +40,7 @@ const WATCH_NODES = [
   { name: "LABELS_TO_PRINT", nodeId: "ns=3;i=10038", type: "generic" as const },
   { name: "ERROR_TEXT", nodeId: "ns=3;i=10049", type: "generic" as const },
 ];
+
 // ------------------------------------------------------------------
 // interner Zustand + EventEmitter
 // ------------------------------------------------------------------
@@ -58,9 +58,34 @@ let lastStatus: PrinterStatus = {
 
 const statusEmitter = new EventEmitter();
 
+// Zeitstempel des letzten „Lebenszeichens“ vom Drucker
+let lastUpdateAt: number | null = null;
+// Health-Check-Timer nur einmal starten
+let healthTimerStarted = false;
+
 // ------------------------------------------------------------------
 function emitStatus() {
-  statusEmitter.emit("update", { ...lastStatus, nodes: [...lastStatus.nodes] });
+  statusEmitter.emit("update", {
+    ...lastStatus,
+    nodes: [...lastStatus.nodes],
+  });
+}
+
+// zentraler Helper für Disconnect
+function markDisconnected(message: string) {
+  lastStatus.connected = false;
+  lastStatus.error = message;
+  // optional, wenn du bei Disconnect alle alten Werte verstecken willst:
+  // lastStatus.nodes = [];
+  emitStatus();
+}
+
+// bei jedem sinnvollen Update aufrufen
+function markAlive() {
+  lastStatus.connected = true;
+  lastStatus.error = undefined;
+  lastUpdateAt = Date.now();
+  emitStatus();
 }
 
 function mapBoolToLamp(
@@ -69,11 +94,9 @@ function mapBoolToLamp(
 ): LampStatus {
   if (type === "error") return val ? "error" : "ok";
   if (type === "ready") return val ? "ok" : "warning";
-
   // generic = reine Info-Signale → Status immer OK
   return "ok";
 }
-
 
 function updateNode(name: string, val: any) {
   const def = WATCH_NODES.find((n) => n.name === name);
@@ -96,6 +119,27 @@ function updateNode(name: string, val: any) {
   }
 }
 
+// Health-Check: wenn länger kein Update → „nicht verbunden“
+function startHealthTimer(timeoutMs = 10_000, intervalMs = 3_000) {
+  if (healthTimerStarted) return;
+  healthTimerStarted = true;
+
+  setInterval(() => {
+    // wenn wir eh schon als disconnected markiert sind, nichts tun
+    if (!lastStatus.connected) return;
+
+    if (lastUpdateAt == null) return;
+
+    const diff = Date.now() - lastUpdateAt;
+    if (diff > timeoutMs) {
+      console.warn(
+        `[OPC-UA Watcher] Timeout (${diff}ms) – keine Antwort vom Drucker`
+      );
+      markDisconnected("OPC-UA Timeout – Drucker vermutlich nicht erreichbar");
+    }
+  }, intervalMs);
+}
+
 // ------------------------------------------------------------------
 // Watcher starten (idempotent)
 // ------------------------------------------------------------------
@@ -104,6 +148,9 @@ export async function startOpcUaWatcher(endpoint: string) {
   watcherStarted = true;
 
   console.log("[OPC-UA Watcher] starting…", endpoint);
+
+  // Health-Check-Timer früh starten
+  startHealthTimer();
 
   // Hilfsfunktion: macht OPC-UA Werte "frontend-freundlich"
   function normalizeValue(raw: any): any {
@@ -135,13 +182,25 @@ export async function startOpcUaWatcher(endpoint: string) {
       },
     });
 
+    // optional: Events vom Client nutzen (falls die in deinem Setup feuern)
+    client.on("close", () => {
+      console.warn("[OPC-UA Watcher] client connection closed");
+      markDisconnected("OPC-UA Verbindung geschlossen");
+    });
+
+    client.on("backoff", (retry: number, delay: number) => {
+      console.warn(
+        `[OPC-UA Watcher] backoff – Versuch ${retry}, nächste in ${delay}ms`
+      );
+      // markDisconnect, aber Health-Checker fängt das sowieso ab
+      markDisconnected(`Reconnecting (Versuch ${retry})…`);
+    });
+
     await client.connect(endpoint);
     session = await client.createSession();
     console.log("[OPC-UA Watcher] session established");
 
-    lastStatus.connected = true;
     lastStatus.endpoint = endpoint;
-    lastStatus.error = undefined;
 
     // 1) Initial Read aller Nodes
     const dataValues = await session.read(
@@ -159,7 +218,8 @@ export async function startOpcUaWatcher(endpoint: string) {
       updateNode(def.name, value);
     });
 
-    emitStatus();
+    // Initiales Lebenszeichen
+    markAlive();
 
     // 2) Subscription für Realtime-Updates
     subscription = ClientSubscription.create(session, {
@@ -172,15 +232,17 @@ export async function startOpcUaWatcher(endpoint: string) {
     });
 
     subscription.on("keepalive", () => {
+      // keepalive = Verbindung ok
+      // Kein Node-Wert geändert, aber Lebenszeichen:
+      lastUpdateAt = Date.now();
       lastStatus.connected = true;
+      lastStatus.error = undefined;
       emitStatus();
     });
 
     subscription.on("terminated", () => {
       console.log("[OPC-UA Watcher] subscription terminated");
-      lastStatus.connected = false;
-      lastStatus.error = "Subscription beendet";
-      emitStatus();
+      markDisconnected("Subscription beendet");
     });
 
     for (const node of WATCH_NODES) {
@@ -203,19 +265,15 @@ export async function startOpcUaWatcher(endpoint: string) {
         const value = normalizeValue(raw);
 
         updateNode(node.name, value);
-        lastStatus.connected = true;
-        lastStatus.error = undefined;
-        emitStatus();
+        // Node-Update = klares Lebenszeichen
+        markAlive();
       });
     }
   } catch (e: any) {
     console.error("[OPC-UA Watcher] ERROR:", e);
-    lastStatus.connected = false;
-    lastStatus.error = e?.message || String(e);
-    emitStatus();
+    markDisconnected(e?.message || String(e));
   }
 }
-
 
 // ------------------------------------------------------------------
 // Getter + Subscription für SSE
