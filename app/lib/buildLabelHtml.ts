@@ -75,14 +75,13 @@ export function buildLabelHtml(opts: {
     font-weight: bold;
   }
 
-  /* Header-Name */
   .name-header {
-    font-size: 45px;
-    max-width: 70%;
-    overflow: hidden;
-    max-height:100%;
-   
-  }
+  font-size: 45px;
+  max-width: 70%;
+  overflow: hidden;
+  max-height: 100%;
+  white-space: normal; /* wrap erlauben */
+}
 
   /* Icon ersetzt Art.-Nr. */
   .diet-icon {
@@ -152,13 +151,13 @@ export function buildLabelHtml(opts: {
     transform: rotate(180deg);
   }
 
-  /* Footer-Name */
-  .name-footer {
-    font-size: 45px;
-    flex: 1;
-    overflow: hidden;
-    white-space: wrap;
-  }
+ .name-footer {
+  font-size: 45px;
+  max-height:100%;
+  flex: 1;
+  overflow: hidden;
+  white-space: normal; /* wrap erlauben */
+}
 
   .rotated-footer-barcode {
     width: 250px;
@@ -236,18 +235,26 @@ export function buildLabelHtml(opts: {
     });
 
     function autoShrinkNames() {
-      const elements = document.querySelectorAll(".name-header, .name-footer");
+  const elements = document.querySelectorAll(".name-header, .name-footer");
 
-      elements.forEach((el) => {
-        const maxWidth = el.offsetWidth;
-        let size = parseInt(window.getComputedStyle(el).fontSize);
+  elements.forEach((el) => {
+    let size = parseInt(window.getComputedStyle(el).fontSize, 10);
 
-        while (el.scrollWidth > maxWidth && size > 10) {
-          size--;
-          el.style.fontSize = size + "px";
-        }
-      });
+    // Die sichtbare Größe des Elements
+    const maxW = el.clientWidth;
+    const maxH = el.clientHeight;
+
+    // Falls Element keinen Platz hat → überspringen
+    if (!maxW || !maxH) return;
+
+    // Loop bis der Text passt
+    while ((el.scrollWidth > maxW || el.scrollHeight > maxH) && size > 8) {
+      size--;
+      el.style.fontSize = size + "px";
     }
+  });
+}
+
   </script>
 </body>
 </html>`;
