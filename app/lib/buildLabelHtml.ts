@@ -5,14 +5,14 @@ export function buildLabelHtml(opts: {
   artNumber: string;         // aktuell unbenutzt im Layout, aber noch im Typ
   weight: string;
   mhd: string;
-  ingredientsHtml: string;   // Richtext mit <strong>, <u>, ...
+  ingredientsHtml: string;   // Richtext/Zutaten
   barcodeData: string;       // EAN/GS1-128 String
   description: string;
   dietTypeSvg?: string;
 }) {
   const {
     name,
-    artNumber,               // wird nicht gerendert, kann später entfernt werden
+    artNumber,
     weight,
     mhd,
     ingredientsHtml,
@@ -68,7 +68,6 @@ export function buildLabelHtml(opts: {
     align-items: center;
     margin-bottom: 12px;
     max-height: 100px;
-  
   }
 
   .name {
@@ -76,12 +75,12 @@ export function buildLabelHtml(opts: {
   }
 
   .name-header {
-  font-size: 45px;
-  max-width: 70%;
-  overflow: hidden;
-  max-height: 100%;
-  white-space: normal; /* wrap erlauben */
-}
+    font-size: 45px;
+    max-width: 70%;
+    overflow: hidden;
+    max-height: 100%;
+    white-space: normal; /* wrap erlauben */
+  }
 
   /* Icon ersetzt Art.-Nr. */
   .diet-icon {
@@ -103,16 +102,17 @@ export function buildLabelHtml(opts: {
     margin-bottom: 12px;
   }
 
-  .zutaten-label {
-    font-weight: bold;
-    font-size: 22px;
-    margin-bottom: 6px;
+  /* Content-Bereich zwischen Header und Footer */
+  .content-area {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
   }
 
   .zutaten {
     font-size: 20px;
     line-height: 1.35;
-    flex-grow: 1;
+    margin-top: 6px;
   }
 
   /* NORMALER FOOTER */
@@ -141,23 +141,20 @@ export function buildLabelHtml(opts: {
     left: 24px;
     right: 24px;
     height: 100px;
-  
-
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 32px;
-
     transform: rotate(180deg);
   }
 
- .name-footer {
-  font-size: 45px;
-  max-height:100%;
-  flex: 1;
-  overflow: hidden;
-  white-space: normal; /* wrap erlauben */
-}
+  .name-footer {
+    font-size: 45px;
+    max-height:100%;
+    flex: 1;
+    overflow: hidden;
+    white-space: normal; /* wrap erlauben */
+  }
 
   .rotated-footer-barcode {
     width: 250px;
@@ -187,10 +184,11 @@ export function buildLabelHtml(opts: {
         : ""
     }
 
-    <div class="zutaten-label">Zutaten:</div>
-
-    <div class="zutaten">
-      ${ingredientsHtml}
+    <!-- Zutatenbereich füllt den Platz vor dem Footer -->
+    <div class="content-area">
+      <div class="zutaten">
+        <strong>Zutaten:</strong> ${ingredientsHtml}
+      </div>
     </div>
 
     <!-- NORMALER FOOTER -->
@@ -235,25 +233,20 @@ export function buildLabelHtml(opts: {
     });
 
     function autoShrinkNames() {
-  const elements = document.querySelectorAll(".name-header, .name-footer");
+      const elements = document.querySelectorAll(".name-header, .name-footer");
 
-  elements.forEach((el) => {
-    let size = parseInt(window.getComputedStyle(el).fontSize, 10);
+      elements.forEach((el) => {
+        let size = parseInt(window.getComputedStyle(el).fontSize, 10);
+        const maxW = el.clientWidth;
+        const maxH = el.clientHeight;
+        if (!maxW || !maxH) return;
 
-    // Die sichtbare Größe des Elements
-    const maxW = el.clientWidth;
-    const maxH = el.clientHeight;
-
-    // Falls Element keinen Platz hat → überspringen
-    if (!maxW || !maxH) return;
-
-    // Loop bis der Text passt
-    while ((el.scrollWidth > maxW || el.scrollHeight > maxH) && size > 8) {
-      size--;
-      el.style.fontSize = size + "px";
+        while ((el.scrollWidth > maxW || el.scrollHeight > maxH) && size > 8) {
+          size--;
+          el.style.fontSize = size + "px";
+        }
+      });
     }
-  });
-}
 
   </script>
 </body>

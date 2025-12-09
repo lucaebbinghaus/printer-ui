@@ -1,7 +1,13 @@
+// app/api/print/route.ts
+
 import { NextResponse } from "next/server";
 import net from "net";
 import { getConfig } from "@/app/lib/storage";
 import { buildLabelHtml } from "@/app/lib/buildLabelHtml";
+import {
+  buildIngredientsFromProduct,
+  XanoProduct,
+} from "@/app/lib/xanoIngredients";
 
 export const runtime = "nodejs";
 
@@ -12,29 +18,20 @@ type SendZplOptions = {
   copies: number;
 };
 
-/**
- * Fügt ein ^PQn nach ^XA in das ZPL ein, um die Anzahl der Etiketten
- * druckerintern zu steuern.
- */
 function injectQuantity(zpl: string, quantity: number): string {
   if (quantity <= 1) return zpl;
 
   const idx = zpl.indexOf("^XA");
   if (idx === -1) {
-    // keine ^XA gefunden → ZPL nicht anfassen, um nichts zu zerschießen
     return zpl;
   }
 
-  const insertPos = idx + 3; // direkt nach ^XA
+  const insertPos = idx + 3;
   const pqCommand = `^PQ${quantity}\n`;
 
   return zpl.slice(0, insertPos) + pqCommand + zpl.slice(insertPos);
 }
 
-/**
- * Sendet ZPL direkt per TCP an den Drucker.
- * Nutzt entweder ^PQ oder kann alternativ ZPL mehrfach senden.
- */
 async function sendZplToPrinter({
   host,
   port,
@@ -42,16 +39,7 @@ async function sendZplToPrinter({
   copies,
 }: SendZplOptions): Promise<void> {
   const copiesSafe = Math.max(1, Number(copies) || 1);
-
-  // Variante A: ^PQ in das ZPL injizieren
   const zplWithQuantity = injectQuantity(zpl, copiesSafe);
-
-  // Variante B (Fallback, wenn ^PQ zickt):
-  // let payload = "";
-  // for (let i = 0; i < copiesSafe; i++) {
-  //   payload += zpl;
-  // }
-  // const zplWithQuantity = payload;
 
   console.log(
     `[PRINT] sending to printer ${host}:${port} with copies=${copiesSafe}`
@@ -81,25 +69,71 @@ export async function POST(req: Request) {
   console.log("---- PRINT API CALLED ----", new Date().toISOString());
 
   try {
-    console.log("[PRINT] t+0ms: start");
-
     const body = await req.json();
-    const tAfterJson = Date.now();
-    console.log("[PRINT] after req.json:", tAfterJson - t0, "ms");
     console.log("[PRINT] REQUEST BODY:", body);
 
-    const {
-      html = "", // Zutaten-Richtext
+    let {
+      html = "",
       name,
       weight,
       art_number,
       mhd,
-      qty, // optionale Menge aus dem Request
+      mhd_days,
+      qty,
       description,
       dietTypeSvg,
-    } = body;
+      product,
+    } = body as {
+      html?: string;
+      name?: string;
+      weight?: string;
+      art_number?: string | number;
+      mhd?: string;
+      mhd_days?: number;
+      qty?: number;
+      description?: string;
+      dietTypeSvg?: string | null;
+      product?: XanoProduct; // Mindest-Typ (Name + Komponenten)
+    };
 
-    if (!art_number || !name) {
+    let ingredientsHtml = html;
+
+    // Wenn ein Produkt mit Komponenten/Ingredients übergeben wurde,
+    // alles serverseitig berechnen.
+    if (product && Array.isArray(product.printer_components_ids)) {
+      const res = buildIngredientsFromProduct(product);
+      ingredientsHtml = res.ingredientsHtml;
+
+      // Für zusätzliche Felder casten wir auf any,
+      // weil sie nicht im minimalen XanoProduct-Typ stehen.
+      const productAny = product as any;
+
+      if (!name) name = product.name;
+
+      if (art_number === undefined || art_number === null) {
+        art_number = productAny.art_number;
+      }
+
+      if (!weight && productAny.weight !== undefined) {
+        weight = `${productAny.weight}g`;
+      }
+
+      if (!description && productAny.description) {
+        description = productAny.description;
+      }
+
+      if (!dietTypeSvg && productAny._addon_printer_product_diet_type?.svg) {
+        dietTypeSvg = productAny._addon_printer_product_diet_type.svg;
+      }
+
+      if (!mhd && productAny.mhd !== undefined && productAny.mhd !== null) {
+        mhd = String(productAny.mhd);
+      }
+    }
+
+    const artNumberStr = String(art_number ?? "").trim();
+
+    if (!artNumberStr || !name) {
       console.warn("[PRINT] Missing fields (art_number, name)");
       return new NextResponse("Missing fields (art_number, name)", {
         status: 400,
@@ -107,20 +141,12 @@ export async function POST(req: Request) {
     }
 
     const config = await getConfig();
-    const tAfterConfig = Date.now();
-    console.log("[PRINT] after getConfig:", tAfterConfig - t0, "ms");
 
-    // Menge:
-    // - wenn qty im Body gesetzt → diese verwenden
-    // - sonst general.defaultLabelQty aus der Config
     const configDefaultQty = Number(config.general?.defaultLabelQty ?? 1);
     const finalQtyRaw =
       qty !== undefined && qty !== null ? qty : configDefaultQty;
     const finalQty = Math.max(1, Number(finalQtyRaw) || 1);
 
-    console.log("[PRINT] finalQty:", finalQty);
-
-    // Drucker-IP aus config
     const printerHost = (config.network?.printerIp || "").trim();
     const printerPort = 9100;
 
@@ -129,40 +155,24 @@ export async function POST(req: Request) {
       return new NextResponse("Printer IP not configured", { status: 500 });
     }
 
-    console.log("[PRINT] printerHost:", printerHost);
-    console.log("[PRINT] printerPort:", printerPort);
+    const barcodeData = artNumberStr;
 
-    // Barcode-Daten (hier erstmal einfach Art.-Nr.)
-    const barcodeData = String(art_number);
-
-    // HTML-Label bauen
     const labelHtml = buildLabelHtml({
       name,
-      artNumber: String(art_number),
+      artNumber: artNumberStr,
       weight: String(weight ?? ""),
       mhd: String(mhd ?? ""),
-      ingredientsHtml: html,
+      ingredientsHtml: ingredientsHtml || "",
       barcodeData,
-      description,
-      dietTypeSvg,
+      description: description ?? "",
+      dietTypeSvg: dietTypeSvg ?? undefined,
     });
-
-    const tAfterHtml = Date.now();
-    console.log("[PRINT] after buildLabelHtml:", tAfterHtml - t0, "ms");
 
     const dataBase64 = Buffer.from(labelHtml, "utf8").toString("base64");
 
     const zplboxUrl = process.env.ZPLBOX_URL ?? "http://zplbox:8080";
-    console.log("[PRINT] ZPLBOX_URL:", zplboxUrl);
-
-    // Nur Render-Endpoint (kein /print)
     const zplboxEndpoint = `${zplboxUrl}/v1/html2zpl`;
-    console.log("[PRINT] ZplBox endpoint (render-only):", zplboxEndpoint);
 
-    const tBeforeFetch = Date.now();
-    console.log("[PRINT] before fetch to ZplBox:", tBeforeFetch - t0, "ms");
-
-    // HTML -> ZPL (nur Rendern)
     const renderRes = await fetch(zplboxEndpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -173,14 +183,6 @@ export async function POST(req: Request) {
         dataBase64,
       }),
     });
-
-    const tAfterFetch = Date.now();
-    console.log("[PRINT] after fetch to ZplBox:", tAfterFetch - t0, "ms");
-    console.log(
-      "[PRINT] fetch duration (ZplBox render):",
-      tAfterFetch - tBeforeFetch,
-      "ms"
-    );
 
     if (!renderRes.ok) {
       const text = await renderRes.text().catch(() => "<no body>");
@@ -194,20 +196,12 @@ export async function POST(req: Request) {
     const zplCode = await renderRes.text();
     console.log("[PRINT] received ZPL length:", zplCode.length);
 
-    // ZPL direkt an den Drucker schicken (mit Quantity)
-    const tBeforeSend = Date.now();
     await sendZplToPrinter({
       host: printerHost,
       port: printerPort,
       zpl: zplCode,
       copies: finalQty,
     });
-    const tAfterSend = Date.now();
-    console.log(
-      "[PRINT] TCP send duration (printer):",
-      tAfterSend - tBeforeSend,
-      "ms"
-    );
 
     console.log(
       "---- PRINT SUCCESS (render+TCP) ---- total:",
