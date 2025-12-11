@@ -19,7 +19,7 @@ export interface XanoIngredient {
   e_number: number;
   allergen_ids: XanoAllergen[];
   additive_function_class_id: number;
-  mandatory_statement: string;
+  mandatory_statement: string; // enthält HTML
   description: string;
   ADDON_additive_function_class?: XanoAdditiveClass;
 }
@@ -39,9 +39,14 @@ export interface XanoProduct {
 /**
  * Zutaten generieren:
  * ✔ Doppelte Zutaten per ID eliminiert
- * ✔ Allergene fett markiert
- * ✔ Mandatory statements in Klammern direkt am Ingredient
- * ✔ Zusatzstoff-Gruppen als:
+ * ✔ Anzeige-Name:
+ *    - NUR wenn Stoffklasse (= Zusatzstoff) vergeben ist UND e_number != 0 → "E123"
+ *    - sonst Ingredient-Name
+ * ✔ Allergene:
+ *    - wenn der ANZEIGE-Name (Name oder E-Nummer) den Allergen-Namen enthält → dieser Teil im Namen fett
+ *    - sonst → Allergenname hinten in Klammern
+ * ✔ mandatory_statement ist HTML und wird unverändert (in Klammern) angehängt
+ * ✔ Zusatzstoffe werden nach Funktionsklasse gruppiert, z. B.:
  *   Konservierungsstoff: (E200, E223 (enthält Schwefel))
  */
 export function buildIngredientsFromProduct(product: XanoProduct): {
@@ -72,65 +77,119 @@ export function buildIngredientsFromProduct(product: XanoProduct): {
   }
   const ingredients = Array.from(uniqueMap.values());
 
-  // 3) Zutaten splitten: normale vs Zusatzstoffe
+  // 3) Zutaten splitten: normale vs Zusatzstoffe (mit Stoffklasse)
   const normalParts: string[] = [];
-  const additiveGroups = new Map<string, { className: string; entries: string[] }>();
+  const additiveGroups = new Map<
+    string,
+    { className: string; entries: string[] }
+  >();
 
   for (const ing of ingredients) {
     const hasAllergens = ing.allergen_ids && ing.allergen_ids.length > 0;
     const className = ing.ADDON_additive_function_class?.name?.trim();
-    const isAdditive = !!className && !!ing.additive_function_class_id;
+    const isAdditive =
+      !!className && !!ing.additive_function_class_id; // NUR dann Zusatzstoff
 
-    // Basistext bestimmen:
-    let base = "";
+    // ---- 3.1 Anzeige-Name bestimmen (Text, ohne HTML) ----
+    // Regel:
+    // - Wenn Zusatzstoff (Stoffklasse gesetzt) und e_number != 0 → "E123"
+    // - sonst normaler Ingredient-Name
+    let displayNameText = "";
 
     if (isAdditive && ing.e_number && ing.e_number !== 0) {
-      base = `E${ing.e_number}`;
+      displayNameText = `E${ing.e_number}`;
     } else {
-      base = ing.name || "";
+      displayNameText = ing.name || "";
     }
 
-    base = escapeHtml(base);
+    // Name als HTML (escaped) – noch ohne Allergene & mandatory_statement
+    let nameHtml = escapeHtml(displayNameText);
 
-    // Mandatory statement anhängen (falls vorhanden)
-    if (ing.mandatory_statement && ing.mandatory_statement.trim() !== "") {
-      const stmt = escapeHtml(ing.mandatory_statement.trim());
-      base = `${base} (${stmt})`;
-    }
+    // mandatory_statement: enthält HTML, wird NICHT escaped
+    const mandatoryHtml =
+      ing.mandatory_statement && ing.mandatory_statement.trim() !== ""
+        ? ing.mandatory_statement.trim()
+        : "";
 
-    // Allergene fett markieren
+    // ---- 3.2 ALLERGEN-LOGIK (bezogen auf displayNameText) ----
     if (hasAllergens) {
-      base = `<strong>${base}</strong>`;
+      const displayLower = displayNameText.toLowerCase().trim();
+      const matchedAllergens: string[] = [];
+      const appendedAllergens: string[] = [];
+
+      for (const allergen of ing.allergen_ids) {
+        const allergenName = allergen.name?.trim() || "";
+        if (!allergenName) continue;
+
+        const allergenLower = allergenName.toLowerCase();
+
+        // Prüfen, ob der *angezeigte Name* (E123 oder Ingredient-Name)
+        // den Allergen-Namen enthält
+        if (displayLower.includes(allergenLower)) {
+          matchedAllergens.push(allergenName);
+        } else {
+          // Allergen kann nicht "im Namen" gezeigt werden → später in Klammern
+          appendedAllergens.push(allergenName);
+        }
+      }
+
+      // Hilfsfunktion für RegExp-Sicherheit
+      function escapeRegExp(str: string) {
+        return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      }
+
+      // 1) Allergene, die im Anzeige-Namen vorkommen, dort fett hervorheben
+      let highlightedNameHtml = nameHtml;
+      for (const a of matchedAllergens) {
+        const regex = new RegExp(escapeRegExp(a), "ig");
+        highlightedNameHtml = highlightedNameHtml.replace(
+          regex,
+          (m) => `<strong>${m}</strong>`
+        );
+      }
+
+      nameHtml = highlightedNameHtml;
+
+      // 2) Allergene, die NICHT im Anzeige-Namen vorkommen, hinten in Klammern
+      if (appendedAllergens.length > 0) {
+        nameHtml += ` (<strong>${appendedAllergens.join(", ")}</strong>)`;
+      }
     }
 
+    // ---- 3.3 mandatory_statement hinten anhängen (HTML, in Klammern) ----
+    let baseHtml = nameHtml;
+    if (mandatoryHtml) {
+      baseHtml += ` (${mandatoryHtml})`;
+    }
+
+    // ---- 3.4 Zutat einsortieren ----
     if (!isAdditive) {
-      normalParts.push(base);
+      // normale Zutat
+      normalParts.push(baseHtml);
     } else {
+      // Zusatzstoff mit Stoffklasse
       let group = additiveGroups.get(className!);
       if (!group) {
         group = { className: className!, entries: [] };
         additiveGroups.set(className!, group);
       }
 
-      if (!group.entries.includes(base)) {
-        group.entries.push(base);
+      if (!group.entries.includes(baseHtml)) {
+        group.entries.push(baseHtml);
       }
     }
   }
 
-  // Zusatzstoff-Gruppen formatieren:
-  // Konservierungsstoff: (E211, E223 (mit Schwefel))
+  // 4) Zusatzstoff-Gruppen formatieren:
+  // z.B. "Konservierungsstoff: (E211, E223 (enthält Schwefel))"
   const additiveParts: string[] = [];
   for (const group of Array.from(additiveGroups.values())) {
     const inner = group.entries.join(", ");
-    const text =
-      `${escapeHtml(group.className)}: (` +
-      inner +
-      `)`;
+    const text = `${escapeHtml(group.className)}: (` + inner + `)`;
     additiveParts.push(text);
   }
 
-  // 4) Output zusammenführen
+  // 5) Output zusammenführen
   const out: string[] = [];
   if (normalParts.length) out.push(normalParts.join(", "));
   if (additiveParts.length) out.push(additiveParts.join(", "));
