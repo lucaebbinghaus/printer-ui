@@ -1,10 +1,9 @@
-// components/TopBar.tsx
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { NAV_ITEMS } from "./nav";
-import { RotateCcw, OctagonX } from "lucide-react";
+import { RotateCcw, OctagonX, Maximize2, Minimize2, Power } from "lucide-react";
 import type { LampStatus } from "@/app/lib/opcuaWatcher";
 import { usePrinterStatus } from "@/app/lib/usePrinterStatus";
 
@@ -36,23 +35,46 @@ export default function TopBar() {
   const [cancelling, setCancelling] = useState(false);
   const [tempMessage, setTempMessage] = useState<string | null>(null);
 
+  // Electron fullscreen state (für Icon)
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(true);
+
+  useEffect(() => {
+    // Wenn nicht in Electron, gibt es electronAPI nicht → einfach ignorieren
+    if (!window.electronAPI?.getFullscreenState) return;
+
+    window.electronAPI
+      .getFullscreenState()
+      .then((v) => setIsFullscreen(Boolean(v)))
+      .catch(() => {});
+  }, []);
+
+  async function handleToggleFullscreen() {
+    if (!window.electronAPI?.toggleFullscreen) return;
+
+    try {
+      await window.electronAPI.toggleFullscreen();
+
+      if (window.electronAPI?.getFullscreenState) {
+        const state = await window.electronAPI.getFullscreenState();
+        setIsFullscreen(Boolean(state));
+      } else {
+        // Fallback: toggeln wir lokal
+        setIsFullscreen((prev) => !prev);
+      }
+    } catch {
+      // ignorieren
+    }
+  }
+
   async function handleCancelJobs() {
     setCancelling(true);
     try {
-      const res = await fetch("/api/print/cancel", {
-        method: "POST",
-      });
-      if (!res.ok) {
-        const msg = await res.text().catch(() => "");
-        throw new Error(msg || "Abbruch fehlgeschlagen");
-      }
-      const json = await res.json();
-      console.log("Cancel result:", json);
+      const res = await fetch("/api/print/cancel", { method: "POST" });
+      if (!res.ok) throw new Error();
 
       setTempMessage("Alle Druckjobs wurden abgebrochen.");
       setTimeout(() => setTempMessage(null), 4000);
-    } catch (e) {
-      console.error(e);
+    } catch {
       setTempMessage("Fehler beim Abbrechen der Jobs.");
       setTimeout(() => setTempMessage(null), 4000);
     } finally {
@@ -60,7 +82,6 @@ export default function TopBar() {
     }
   }
 
-  // zweite Zeile im Chip
   const secondaryLine = (() => {
     if (tempMessage) return tempMessage;
     if (!connected) return "Keine Verbindung zum Drucker.";
@@ -77,7 +98,6 @@ export default function TopBar() {
     return "Bereit für neuen Druckauftrag.";
   })();
 
-  // erste Zeile (kurz)
   const primaryLine = (() => {
     if (!connected) return "Drucker nicht verbunden";
     if (!isReady) return "Drucker nicht bereit";
@@ -93,8 +113,7 @@ export default function TopBar() {
             <nav className="flex items-center">
               {NAV_ITEMS.map((item) => {
                 const active =
-                  pathname === item.href ||
-                  pathname.startsWith(item.href + "/");
+                  pathname === item.href || pathname.startsWith(item.href + "/");
 
                 const Icon = (item as any).icon;
 
@@ -118,7 +137,7 @@ export default function TopBar() {
           </div>
         </div>
 
-        {/* Right: Status + Cancel + Refresh */}
+        {/* Right: Status + Cancel + Refresh + Resize + Shutdown */}
         <div className="flex items-center gap-3">
           {/* Status-Chip */}
           <div className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1 text-xs text-gray-700 shadow-sm max-w-xs">
@@ -146,11 +165,37 @@ export default function TopBar() {
           <button
             aria-label="Refresh"
             className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 shadow-sm hover:bg-gray-50 active:scale-[0.98]"
-            onClick={() => {
-              location.reload();
-            }}
+            onClick={() => location.reload()}
           >
             <RotateCcw className="h-4 w-4" />
+          </button>
+
+          {/* Resize / Fullscreen Toggle Button (nur 1 Button) */}
+          <button
+            aria-label="Vollbild umschalten"
+            title={isFullscreen ? "Fenstergröße" : "Vollbild"}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 shadow-sm hover:bg-gray-50 active:scale-[0.98]"
+            onClick={handleToggleFullscreen}
+          >
+            {isFullscreen ? (
+              <Minimize2 className="h-4 w-4" />
+            ) : (
+              <Maximize2 className="h-4 w-4" />
+            )}
+          </button>
+
+          {/* Shutdown Button */}
+          <button
+            aria-label="Host herunterfahren"
+            title="System herunterfahren"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-200 bg-white text-red-600 shadow-sm hover:bg-red-50 active:scale-[0.98]"
+            onClick={() => {
+              if (confirm("System wirklich herunterfahren?")) {
+                window.electronAPI?.shutdownHost?.();
+              }
+            }}
+          >
+            <Power className="h-4 w-4" />
           </button>
         </div>
       </div>
