@@ -3,9 +3,17 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { NAV_ITEMS } from "./nav";
-import { RotateCcw, OctagonX, Maximize2, Minimize2, Power } from "lucide-react";
+import {
+  RotateCcw,
+  OctagonX,
+  Maximize2,
+  Minimize2,
+  Power,
+} from "lucide-react";
 import type { LampStatus } from "@/app/lib/opcuaWatcher";
 import { usePrinterStatus } from "@/app/lib/usePrinterStatus";
+
+/* ---------------- Status Dot ---------------- */
 
 function StatusDot({ status }: { status: LampStatus }) {
   const map: Record<LampStatus, string> = {
@@ -14,10 +22,13 @@ function StatusDot({ status }: { status: LampStatus }) {
     error: "bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.6)]",
     unknown: "bg-gray-400",
   };
+
   return (
     <span className={`inline-block w-2.5 h-2.5 rounded-full ${map[status]}`} />
   );
 }
+
+/* ---------------- TopBar ---------------- */
 
 export default function TopBar() {
   const pathname = usePathname();
@@ -35,36 +46,45 @@ export default function TopBar() {
   const [cancelling, setCancelling] = useState(false);
   const [tempMessage, setTempMessage] = useState<string | null>(null);
 
-  // Electron fullscreen state (für Icon)
+  // Fullscreen-State für Resize-Button
   const [isFullscreen, setIsFullscreen] = useState<boolean>(true);
 
-  useEffect(() => {
-    // Wenn nicht in Electron, gibt es electronAPI nicht → einfach ignorieren
-    if (!window.electronAPI?.getFullscreenState) return;
+  // Electron API (bewusst defensiv)
+  const electronAPI =
+    typeof window !== "undefined" ? (window as any).electronAPI : null;
 
-    window.electronAPI
+  /* -------- initial Fullscreen-Status -------- */
+
+  useEffect(() => {
+    if (!electronAPI?.getFullscreenState) return;
+
+    electronAPI
       .getFullscreenState()
-      .then((v) => setIsFullscreen(Boolean(v)))
+      .then((v: boolean) => setIsFullscreen(Boolean(v)))
       .catch(() => {});
   }, []);
 
-  async function handleToggleFullscreen() {
-    if (!window.electronAPI?.toggleFullscreen) return;
+  /* -------- Resize Toggle -------- */
+
+  async function handleToggleResize() {
+    if (!electronAPI?.toggleResize) return;
 
     try {
-      await window.electronAPI.toggleFullscreen();
+      await electronAPI.toggleResize();
 
-      if (window.electronAPI?.getFullscreenState) {
-        const state = await window.electronAPI.getFullscreenState();
+      if (electronAPI?.getFullscreenState) {
+        const state = await electronAPI.getFullscreenState();
         setIsFullscreen(Boolean(state));
       } else {
-        // Fallback: toggeln wir lokal
+        // Fallback: lokal toggeln
         setIsFullscreen((prev) => !prev);
       }
     } catch {
-      // ignorieren
+      // bewusst ignorieren
     }
   }
+
+  /* -------- Cancel Jobs -------- */
 
   async function handleCancelJobs() {
     setCancelling(true);
@@ -81,6 +101,8 @@ export default function TopBar() {
       setCancelling(false);
     }
   }
+
+  /* -------- Status Text -------- */
 
   const secondaryLine = (() => {
     if (tempMessage) return tempMessage;
@@ -104,42 +126,43 @@ export default function TopBar() {
     return "Drucker bereit";
   })();
 
+  /* ---------------- Render ---------------- */
+
   return (
     <header className="w-full bg-[#efefef] border-b border-gray-200">
       <div className="mx-auto flex h-14 items-center justify-between px-4">
-        {/* Left: Tabs */}
-        <div className="flex items-center">
-          <div className="flex items-center bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-            <nav className="flex items-center">
-              {NAV_ITEMS.map((item) => {
-                const active =
-                  pathname === item.href || pathname.startsWith(item.href + "/");
+        {/* Left: Navigation */}
+        <div className="flex items-center bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+          <nav className="flex items-center">
+            {NAV_ITEMS.map((item) => {
+              const active =
+                pathname === item.href ||
+                pathname.startsWith(item.href + "/");
 
-                const Icon = (item as any).icon;
+              const Icon = (item as any).icon;
 
-                return (
-                  <button
-                    key={item.key}
-                    onClick={() => router.push(item.href)}
-                    className={[
-                      "inline-flex items-center gap-2 px-4 py-2 text-sm font-medium transition border-l border-gray-200",
-                      active
-                        ? "bg-gray-900 text-white"
-                        : "text-gray-700 hover:bg-gray-50",
-                    ].join(" ")}
-                  >
-                    {Icon && <Icon className="h-4 w-4" />}
-                    {item.label}
-                  </button>
-                );
-              })}
-            </nav>
-          </div>
+              return (
+                <button
+                  key={item.key}
+                  onClick={() => router.push(item.href)}
+                  className={[
+                    "inline-flex items-center gap-2 px-4 py-2 text-sm font-medium transition border-l border-gray-200",
+                    active
+                      ? "bg-gray-900 text-white"
+                      : "text-gray-700 hover:bg-gray-50",
+                  ].join(" ")}
+                >
+                  {Icon && <Icon className="h-4 w-4" />}
+                  {item.label}
+                </button>
+              );
+            })}
+          </nav>
         </div>
 
-        {/* Right: Status + Cancel + Refresh + Resize + Shutdown */}
+        {/* Right: Status + Actions */}
         <div className="flex items-center gap-3">
-          {/* Status-Chip */}
+          {/* Status */}
           <div className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1 text-xs text-gray-700 shadow-sm max-w-xs">
             <StatusDot status={connected ? overallStatus : "error"} />
             <div className="flex flex-col leading-tight overflow-hidden">
@@ -150,32 +173,32 @@ export default function TopBar() {
             </div>
           </div>
 
-          {/* Cancel Button */}
+          {/* Cancel */}
           <button
             aria-label="Alle Druckjobs abbrechen"
-            title="Alle Druckjobs abbrechen (TotalCancel)"
+            title="Alle Druckjobs abbrechen"
             disabled={cancelling || !connected}
-            className="inline-flex h-9 w-20 items-center justify-center rounded-lg border border-red-200 bg-white text-red-600 shadow-sm hover:bg-red-50 active:scale-[0.98] disabled:opacity-60"
             onClick={handleCancelJobs}
+            className="inline-flex h-9 w-20 items-center justify-center rounded-lg border border-red-200 bg-white text-red-600 shadow-sm hover:bg-red-50 active:scale-[0.98] disabled:opacity-60"
           >
             <OctagonX className="h-4 w-4" />
           </button>
 
-          {/* Refresh Button */}
+          {/* Refresh */}
           <button
             aria-label="Refresh"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 shadow-sm hover:bg-gray-50 active:scale-[0.98]"
             onClick={() => location.reload()}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 shadow-sm hover:bg-gray-50 active:scale-[0.98]"
           >
             <RotateCcw className="h-4 w-4" />
           </button>
 
-          {/* Resize / Fullscreen Toggle Button (nur 1 Button) */}
+          {/* Resize / Fullscreen Toggle (ein Button) */}
           <button
-            aria-label="Vollbild umschalten"
-            title={isFullscreen ? "Fenstergröße" : "Vollbild"}
+            aria-label="Fenstergröße umschalten"
+            title={isFullscreen ? "Fenstermodus" : "Vollbild"}
+            onClick={handleToggleResize}
             className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 shadow-sm hover:bg-gray-50 active:scale-[0.98]"
-            onClick={handleToggleFullscreen}
           >
             {isFullscreen ? (
               <Minimize2 className="h-4 w-4" />
@@ -184,16 +207,16 @@ export default function TopBar() {
             )}
           </button>
 
-          {/* Shutdown Button */}
+          {/* Shutdown */}
           <button
             aria-label="Host herunterfahren"
             title="System herunterfahren"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-200 bg-white text-red-600 shadow-sm hover:bg-red-50 active:scale-[0.98]"
             onClick={() => {
               if (confirm("System wirklich herunterfahren?")) {
-                window.electronAPI?.shutdownHost?.();
+                electronAPI?.shutdownHost?.();
               }
             }}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-200 bg-white text-red-600 shadow-sm hover:bg-red-50 active:scale-[0.98]"
           >
             <Power className="h-4 w-4" />
           </button>

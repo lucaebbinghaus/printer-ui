@@ -26,22 +26,31 @@ function createWindow() {
 
 app.whenReady().then(createWindow);
 
-/* ================= IPC ================= */
+/* ===== Resize statt Minimize ===== */
 
-// Toggle Fullscreen
-ipcMain.handle("window:toggle-fullscreen", () => {
+ipcMain.handle("window:toggle-resize", () => {
   if (!mainWindow) return;
+
   const isFs = mainWindow.isFullScreen();
-  mainWindow.setFullScreen(!isFs);
+
+  if (isFs) {
+    mainWindow.setKiosk(false);
+    mainWindow.setFullScreen(false);
+    mainWindow.setAlwaysOnTop(false);
+    mainWindow.setBounds({ width: 1280, height: 800 });
+    mainWindow.center();
+  } else {
+    mainWindow.setAlwaysOnTop(true);
+    mainWindow.setFullScreen(true);
+    mainWindow.setKiosk(true);
+  }
 });
 
-// Fullscreen State abfragen
 ipcMain.handle("window:is-fullscreen", () => {
   if (!mainWindow) return false;
   return mainWindow.isFullScreen();
 });
 
-// Host herunterfahren (Ubuntu)
 ipcMain.handle("host:shutdown", () => {
   exec("shutdown -h now");
 });
