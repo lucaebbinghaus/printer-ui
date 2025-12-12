@@ -46,12 +46,13 @@ export default function TopBar() {
   const [cancelling, setCancelling] = useState(false);
   const [tempMessage, setTempMessage] = useState<string | null>(null);
 
-  // Fullscreen-State für Resize-Button
-  const [isFullscreen, setIsFullscreen] = useState<boolean>(true);
+  const [isFullscreen, setIsFullscreen] = useState(true);
 
-  // Electron API (bewusst defensiv)
   const electronAPI =
     typeof window !== "undefined" ? (window as any).electronAPI : null;
+
+  const isLabelsPage =
+    pathname === "/labels" || pathname.startsWith("/labels/");
 
   /* -------- initial Fullscreen-Status -------- */
 
@@ -71,17 +72,9 @@ export default function TopBar() {
 
     try {
       await electronAPI.toggleResize();
-
-      if (electronAPI?.getFullscreenState) {
-        const state = await electronAPI.getFullscreenState();
-        setIsFullscreen(Boolean(state));
-      } else {
-        // Fallback: lokal toggeln
-        setIsFullscreen((prev) => !prev);
-      }
-    } catch {
-      // bewusst ignorieren
-    }
+      const state = await electronAPI.getFullscreenState?.();
+      if (typeof state === "boolean") setIsFullscreen(state);
+    } catch {}
   }
 
   /* -------- Cancel Jobs -------- */
@@ -129,99 +122,111 @@ export default function TopBar() {
   /* ---------------- Render ---------------- */
 
   return (
-    <header className="w-full bg-[#efefef] border-b border-gray-200">
-      <div className="mx-auto flex h-14 items-center justify-between px-4">
-        {/* Left: Navigation */}
-        <div className="flex items-center bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-          <nav className="flex items-center">
-            {NAV_ITEMS.map((item) => {
-              const active =
-                pathname === item.href ||
-                pathname.startsWith(item.href + "/");
+    <>
+      {/* TOP BAR – immer über Content */}
+      <header className="sticky top-0 z-[1000] w-full bg-[#efefef] border-b border-gray-200">
+        <div className="mx-auto flex h-14 items-center justify-between px-4">
+          {/* Left: Navigation */}
+          <div className="flex items-center bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden [-webkit-app-region:no-drag]">
+            <nav className="flex items-center">
+              {NAV_ITEMS.map((item) => {
+                const active =
+                  pathname === item.href ||
+                  pathname.startsWith(item.href + "/");
 
-              const Icon = (item as any).icon;
+                const Icon = (item as any).icon;
 
-              return (
-                <button
-                  key={item.key}
-                  onClick={() => router.push(item.href)}
-                  className={[
-                    "inline-flex items-center gap-2 px-4 py-2 text-sm font-medium transition border-l border-gray-200",
-                    active
-                      ? "bg-gray-900 text-white"
-                      : "text-gray-700 hover:bg-gray-50",
-                  ].join(" ")}
-                >
-                  {Icon && <Icon className="h-4 w-4" />}
-                  {item.label}
-                </button>
-              );
-            })}
-          </nav>
-        </div>
-
-        {/* Right: Status + Actions */}
-        <div className="flex items-center gap-3">
-          {/* Status */}
-          <div className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1 text-xs text-gray-700 shadow-sm max-w-xs">
-            <StatusDot status={connected ? overallStatus : "error"} />
-            <div className="flex flex-col leading-tight overflow-hidden">
-              <span className="font-medium truncate">{primaryLine}</span>
-              <span className="text-[11px] text-gray-500 truncate">
-                {secondaryLine}
-              </span>
-            </div>
+                return (
+                  <button
+                    key={item.key}
+                    onClick={() => router.push(item.href)}
+                    className={[
+                      "inline-flex items-center gap-2 px-4 py-2 text-sm font-medium transition border-l border-gray-200",
+                      "[-webkit-app-region:no-drag]",
+                      active
+                        ? "bg-gray-900 text-white"
+                        : "text-gray-700 hover:bg-gray-50",
+                    ].join(" ")}
+                  >
+                    {Icon && <Icon className="h-4 w-4" />}
+                    {item.label}
+                  </button>
+                );
+              })}
+            </nav>
           </div>
 
-          {/* Cancel */}
-          <button
-            aria-label="Alle Druckjobs abbrechen"
-            title="Alle Druckjobs abbrechen"
-            disabled={cancelling || !connected}
-            onClick={handleCancelJobs}
-            className="inline-flex h-9 w-20 items-center justify-center rounded-lg border border-red-200 bg-white text-red-600 shadow-sm hover:bg-red-50 active:scale-[0.98] disabled:opacity-60"
-          >
-            <OctagonX className="h-4 w-4" />
-          </button>
+          {/* Right: Status + Actions */}
+          <div className="flex items-center gap-3 [-webkit-app-region:no-drag]">
+            {/* Status */}
+            <div className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1 text-xs text-gray-700 shadow-sm max-w-xs">
+              <StatusDot status={connected ? overallStatus : "error"} />
+              <div className="flex flex-col leading-tight overflow-hidden">
+                <span className="font-medium truncate">{primaryLine}</span>
+                <span className="text-[11px] text-gray-500 truncate">
+                  {secondaryLine}
+                </span>
+              </div>
+            </div>
 
-          {/* Refresh */}
-          <button
-            aria-label="Refresh"
-            onClick={() => location.reload()}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 shadow-sm hover:bg-gray-50 active:scale-[0.98]"
-          >
-            <RotateCcw className="h-4 w-4" />
-          </button>
+            {/* Refresh */}
+            <button
+              aria-label="Refresh"
+              onClick={() => location.reload()}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 shadow-sm hover:bg-gray-50 active:scale-[0.98]"
+            >
+              <RotateCcw className="h-4 w-4" />
+            </button>
 
-          {/* Resize / Fullscreen Toggle (ein Button) */}
-          <button
-            aria-label="Fenstergröße umschalten"
-            title={isFullscreen ? "Fenstermodus" : "Vollbild"}
-            onClick={handleToggleResize}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 shadow-sm hover:bg-gray-50 active:scale-[0.98]"
-          >
-            {isFullscreen ? (
-              <Minimize2 className="h-4 w-4" />
-            ) : (
-              <Maximize2 className="h-4 w-4" />
-            )}
-          </button>
+            {/* Resize */}
+            <button
+              aria-label="Fenstergröße umschalten"
+              onClick={handleToggleResize}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 shadow-sm hover:bg-gray-50 active:scale-[0.98]"
+            >
+              {isFullscreen ? (
+                <Minimize2 className="h-4 w-4" />
+              ) : (
+                <Maximize2 className="h-4 w-4" />
+              )}
+            </button>
 
-          {/* Shutdown */}
-          <button
-            aria-label="Host herunterfahren"
-            title="System herunterfahren"
-            onClick={() => {
-              if (confirm("System wirklich herunterfahren?")) {
-                electronAPI?.shutdownHost?.();
-              }
-            }}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-200 bg-white text-red-600 shadow-sm hover:bg-red-50 active:scale-[0.98]"
-          >
-            <Power className="h-4 w-4" />
-          </button>
+            {/* Shutdown */}
+            <button
+              aria-label="Host herunterfahren"
+              onClick={() => {
+                if (confirm("System wirklich herunterfahren?")) {
+                  electronAPI?.shutdownHost?.();
+                }
+              }}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-200 bg-white text-red-600 shadow-sm hover:bg-red-50 active:scale-[0.98]"
+            >
+              <Power className="h-4 w-4" />
+            </button>
+          </div>
         </div>
-      </div>
-    </header>
+      </header>
+
+      {/* CANCEL – fixed unten rechts */}
+      {isLabelsPage && (
+        <button
+          aria-label="Alle Druckjobs abbrechen"
+          title="Alle Druckjobs abbrechen"
+          disabled={cancelling}
+          onClick={handleCancelJobs}
+          className={[
+            "fixed z-[2000] pointer-events-auto",
+            "right-6 bottom-6",
+            "[-webkit-app-region:no-drag]",
+            "inline-flex h-14 w-14 items-center justify-center rounded-2xl",
+            "border border-red-200 bg-white text-red-600 shadow-xl",
+            "hover:bg-red-50 active:scale-[0.97]",
+            "disabled:opacity-60",
+          ].join(" ")}
+        >
+          <OctagonX className="h-6 w-6" />
+        </button>
+      )}
+    </>
   );
 }
