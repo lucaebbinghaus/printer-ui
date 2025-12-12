@@ -1,20 +1,7 @@
 import { NextResponse } from "next/server";
-import os from "os";
 import { getConfig, saveConfig } from "@/app/lib/storage";
 
-export const runtime = "nodejs"; // wichtig wegen fs/promises
-
-function getCurrentDeviceIp() {
-  const ifaces = os.networkInterfaces();
-  for (const name of Object.keys(ifaces)) {
-    for (const iface of ifaces[name] || []) {
-      if (iface.family === "IPv4" && !iface.internal) {
-        return iface.address;
-      }
-    }
-  }
-  return "";
-}
+export const runtime = "nodejs";
 
 const isValidIPv4 = (ip: string) => {
   const parts = ip.trim().split(".");
@@ -31,9 +18,7 @@ export async function GET() {
     const config = await getConfig();
 
     return NextResponse.json({
-      deviceIpCurrent: getCurrentDeviceIp(),
-      deviceIpConfig: config.network.deviceIpConfig,
-      printerIp: config.network.printerIp,
+      printerIp: config.network?.printerIp || "",
     });
   } catch (e: any) {
     console.error("GET /api/settings/network failed:", e);
@@ -44,14 +29,9 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
-
-    const nextDeviceIpConfig = String(body.deviceIpConfig || "").trim();
     const nextPrinterIp = String(body.printerIp || "").trim();
 
-    if (
-      (nextDeviceIpConfig && !isValidIPv4(nextDeviceIpConfig)) ||
-      (nextPrinterIp && !isValidIPv4(nextPrinterIp))
-    ) {
+    if (nextPrinterIp && !isValidIPv4(nextPrinterIp)) {
       return new NextResponse("validation error", { status: 400 });
     }
 
@@ -60,7 +40,7 @@ export async function POST(req: Request) {
     const next = {
       ...config,
       network: {
-        deviceIpConfig: nextDeviceIpConfig,
+        ...(config.network || {}),
         printerIp: nextPrinterIp,
       },
     };
