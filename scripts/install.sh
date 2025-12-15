@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# -------------------------------------------------
-# Grundkonfiguration
-# -------------------------------------------------
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TARGET_DIR="/opt/printer-ui"
 APP_USER="${APP_USER:-$(logname 2>/dev/null || whoami)}"
@@ -13,14 +10,14 @@ has_cmd() { command -v "$1" >/dev/null 2>&1; }
 
 log "=== INSTALL START ==="
 log "Source repo:  $PROJECT_DIR"
-log "Target dir:  $TARGET_DIR"
-log "App user:    $APP_USER"
+log "Target dir:   $TARGET_DIR"
+log "App user:     $APP_USER"
 
 # -------------------------------------------------
-# 1) Docker automatisch installieren (falls fehlt)
+# 1) Docker installieren (falls fehlt)
 # -------------------------------------------------
 if ! has_cmd docker; then
-  log "[1/14] Docker not found → installing (official repo)"
+  log "[1/15] Docker not found → installing (official repo)"
 
   sudo apt update
   sudo apt install -y ca-certificates curl gnupg
@@ -40,37 +37,36 @@ if ! has_cmd docker; then
   sudo apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
   sudo systemctl enable --now docker
 else
-  log "[1/14] Docker already installed"
+  log "[1/15] Docker already installed"
 fi
 
-# docker compose Plugin prüfen
 if ! docker compose version >/dev/null 2>&1; then
   log "ERROR: docker compose plugin missing"
   exit 1
 fi
 
 # -------------------------------------------------
-# 2) Node.js + npm + curl (Host) für Electron
+# 2) Host Dependencies: node/npm/curl/python3
 # -------------------------------------------------
-log "[2/14] Ensure nodejs/npm/curl installed (host)"
+log "[2/15] Ensure host deps installed (nodejs/npm/curl/python3)"
 sudo apt update
-sudo apt install -y nodejs npm curl
+sudo apt install -y nodejs npm curl python3
 
 # -------------------------------------------------
 # 3) User in docker-Gruppe
 # -------------------------------------------------
 if ! groups "$APP_USER" | grep -q docker; then
-  log "[3/14] Adding $APP_USER to docker group"
+  log "[3/15] Adding $APP_USER to docker group"
   sudo usermod -aG docker "$APP_USER"
   log "NOTE: Logout/Login required for docker group to apply"
 else
-  log "[3/14] User already in docker group"
+  log "[3/15] User already in docker group"
 fi
 
 # -------------------------------------------------
-# 4) Repo nach /opt spiegeln (idempotent)
+# 4) Repo nach /opt spiegeln
 # -------------------------------------------------
-log "[4/14] Sync repo to $TARGET_DIR"
+log "[4/15] Sync repo to $TARGET_DIR"
 sudo mkdir -p "$TARGET_DIR"
 sudo rsync -a --delete \
   --exclude '.git' \
@@ -81,51 +77,52 @@ sudo rsync -a --delete \
 sudo chown -R "$APP_USER:$APP_USER" "$TARGET_DIR"
 
 # -------------------------------------------------
-# 5) Git Submodule holen
+# 5) Submodule
 # -------------------------------------------------
-log "[5/14] Update git submodules"
+log "[5/15] Update git submodules"
 cd "$TARGET_DIR"
 git submodule sync --recursive
 git submodule update --init --recursive
 
 # -------------------------------------------------
-# 6) Scripts ausführbar machen
+# 6) Scripts ausführbar
 # -------------------------------------------------
-log "[6/14] Make scripts executable"
+log "[6/15] Make scripts executable"
 sudo chmod +x "$TARGET_DIR/scripts/"*.sh || true
 sudo chmod +x "$TARGET_DIR/electron-app/start.sh" || true
+sudo chmod +x "$TARGET_DIR/scripts/updaterd.py" || true
 
 # -------------------------------------------------
-# 7) Host Node dependencies installieren (für Electron)
+# 7) Host Node deps installieren (für Electron)
 # -------------------------------------------------
-log "[7/14] Install Node dependencies on host (for Electron)"
+log "[7/15] Host npm install (for Electron)"
 cd "$TARGET_DIR"
 sudo -u "$APP_USER" npm install
 
 # -------------------------------------------------
-# 8) Fix Electron chrome-sandbox (SUID) – sonst startet Electron nicht
+# 8) Fix Electron chrome-sandbox (SUID)
 # -------------------------------------------------
-log "[8/14] Fix Electron chrome-sandbox permissions"
+log "[8/15] Fix Electron chrome-sandbox permissions"
 if [[ -f "$TARGET_DIR/node_modules/electron/dist/chrome-sandbox" ]]; then
   sudo chown root:root "$TARGET_DIR/node_modules/electron/dist/chrome-sandbox"
   sudo chmod 4755 "$TARGET_DIR/node_modules/electron/dist/chrome-sandbox"
 else
-  log "WARN: chrome-sandbox not found (electron not installed yet?)"
+  log "WARN: chrome-sandbox not found (electron not installed?)"
 fi
 
 # -------------------------------------------------
 # 9) APP_USER zentral speichern
 # -------------------------------------------------
-log "[9/14] Write /etc/default/printer-ui"
+log "[9/15] Write /etc/default/printer-ui"
 sudo tee /etc/default/printer-ui >/dev/null <<EOF
 APP_USER=$APP_USER
 EOF
 sudo chmod 0644 /etc/default/printer-ui
 
 # -------------------------------------------------
-# 10) systemd Units installieren (Backend + Update) aus Repo-Templates
+# 10) systemd System-Units aus Repo installieren
 # -------------------------------------------------
-log "[10/14] Install systemd units (backend + update) from repo templates"
+log "[10/15] Install systemd system units (backend + update + updater)"
 
 APP_USER_ESCAPED="$(printf '%s\n' "$APP_USER" | sed 's/[\/&]/\\&/g')"
 
@@ -139,78 +136,78 @@ sed "s/@APP_USER@/$APP_USER_ESCAPED/g" \
   "$TARGET_DIR/systemd/printer-ui-update.service.in" \
   | sudo tee /etc/systemd/system/printer-ui-update.service >/dev/null
 
-# Alten (falschen) Electron-Systemservice ggf. deaktivieren
+# Host-Updater (Service-Datei liegt als echte .service im Repo)
+sudo cp "$TARGET_DIR/systemd/system/printer-ui-updater.service" \
+        /etc/systemd/system/printer-ui-updater.service
+
+# Legacy system electron service deaktivieren (falls vorhanden)
 if systemctl list-unit-files | grep -q '^printer-ui-electron\.service'; then
-  log "[10/14] Disabling legacy system electron service"
+  log "[10/15] Disabling legacy system electron service"
   sudo systemctl disable --now printer-ui-electron.service || true
 fi
 
 sudo systemctl daemon-reload
 sudo systemctl enable printer-ui.service
 sudo systemctl enable printer-ui-update.service
+sudo systemctl enable --now printer-ui-updater.service
 
 # -------------------------------------------------
-# 11) Electron als USER systemd service aus Repo installieren
-#     Datei im Repo: systemd/user/printer-ui-electron.service.in
+# 11) Electron User-Unit aus Repo installieren + linger
 # -------------------------------------------------
-log "[11/14] Install user systemd service for Electron (from repo)"
+log "[11/15] Install user systemd unit for Electron (from repo) + enable linger"
 
 USER_UNIT_DIR="/home/$APP_USER/.config/systemd/user"
 sudo mkdir -p "$USER_UNIT_DIR"
 
-# optional substitution (falls @APP_USER@ im Template genutzt wird)
 sed "s/@APP_USER@/$APP_USER_ESCAPED/g" \
   "$TARGET_DIR/systemd/user/printer-ui-electron.service.in" \
   | sudo tee "$USER_UNIT_DIR/printer-ui-electron.service" >/dev/null
 
 sudo chown -R "$APP_USER:$APP_USER" "/home/$APP_USER/.config"
 
-# User-Service beim Boot starten (ohne aktives SSH)
-log "[11/14] Enable linger for $APP_USER"
 sudo loginctl enable-linger "$APP_USER"
 
-log "[11/14] Enable/start user electron service"
-log "[11/14] Enable linger for $APP_USER"
-sudo loginctl enable-linger "$APP_USER"
-
-# User unit aktivieren/starten – nur wenn User-Bus erreichbar
-log "[11/14] Try enable/start user electron service"
-if sudo -u "$APP_USER" systemctl --user show-environment >/dev/null 2>&1; then
-  sudo -u "$APP_USER" systemctl --user daemon-reload
-  sudo -u "$APP_USER" systemctl --user enable --now printer-ui-electron.service
-  log "[11/14] User electron service enabled+started"
+# Nur versuchen, wenn User-Bus erreichbar
+APP_UID="$(id -u "$APP_USER" 2>/dev/null || echo "")"
+if [[ -n "${APP_UID:-}" && -S "/run/user/$APP_UID/bus" ]]; then
+  log "[11/15] User bus available → enable/start user electron service"
+  if command -v machinectl >/dev/null 2>&1; then
+    sudo machinectl shell "$APP_USER"@ /bin/bash -lc \
+      'systemctl --user daemon-reload && systemctl --user enable --now printer-ui-electron.service' \
+      || true
+  else
+    sudo -u "$APP_USER" XDG_RUNTIME_DIR="/run/user/$APP_UID" systemctl --user daemon-reload || true
+    sudo -u "$APP_USER" XDG_RUNTIME_DIR="/run/user/$APP_UID" systemctl --user enable --now printer-ui-electron.service || true
+  fi
 else
-  log "[11/14] User bus not available now (no active user session)."
-  log "        The service will start automatically when the user session is created."
-  log "        Manual start (once logged into GUI):"
-  log "        systemctl --user daemon-reload && systemctl --user enable --now printer-ui-electron.service"
+  log "[11/15] User bus not available now → will start on next GUI session"
 fi
 
-
 # -------------------------------------------------
-# 12) Docker Images bauen + Container starten
+# 12) Docker build + up
 # -------------------------------------------------
-log "[12/14] docker compose build"
+log "[12/15] docker compose build"
 cd "$TARGET_DIR"
 docker compose build
 
-log "[12/14] docker compose up -d"
+log "[12/15] docker compose up -d"
 docker compose up -d --remove-orphans
 
 # -------------------------------------------------
 # 13) Backend systemd Service starten
 # -------------------------------------------------
-log "[13/14] Start backend service"
+log "[13/15] Restart backend service"
 sudo systemctl restart printer-ui.service || true
 
 # -------------------------------------------------
-# 14) Status anzeigen
+# 14) Status (system)
 # -------------------------------------------------
-log "[14/14] Status (system)"
+log "[14/15] Status (system services)"
 systemctl --no-pager status printer-ui.service || true
+systemctl --no-pager status printer-ui-updater.service || true
 
-log "[14/14] Status (user electron)"
-sudo -u "$APP_USER" systemctl --user --no-pager status printer-ui-electron.service || true
-
-log "=== INSTALL DONE ==="
+# -------------------------------------------------
+# 15) Done
+# -------------------------------------------------
+log "[15/15] INSTALL DONE"
 log "If Docker was newly installed: log out and log back in once."
