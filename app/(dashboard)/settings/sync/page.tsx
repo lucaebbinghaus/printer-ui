@@ -1,302 +1,206 @@
 "use client";
 
-import KeyboardInput from "@/app/components/KeyboardInput";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import {
-  Save,
-  Download,
-  RefreshCcw,
-  Info,
-  Link2,
-  ToggleLeft,
-  ToggleRight,
-} from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Save, Printer, Info, RefreshCcw } from "lucide-react";
 
-type XanoSettings = {
-  enabled: boolean;
-  baseUrl: string;
-  productsEndpoint: string;
-  intervalMinutes: number;
-  printerId: string;
-  apiKey: string;
-  lastSyncAt: string | null;
+type NetworkSettings = {
+  printerIp: string;
 };
 
-export default function SettingsPage() {
-  const router = useRouter();
+const isValidIPv4 = (ip: string) => {
+  const parts = ip.trim().split(".");
+  if (parts.length !== 4) return false;
+  return parts.every((p) => {
+    if (!/^\d+$/.test(p)) return false;
+    const n = Number(p);
+    return n >= 0 && n <= 255;
+  });
+};
+
+export default function NetworkSettingsPage() {
+  const [data, setData] = useState<NetworkSettings | null>(null);
+  const [printerIp, setPrinterIp] = useState("");
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-
-  const [enabled, setEnabled] = useState(true);
-  const [baseUrl, setBaseUrl] = useState("");
-  const [productsEndpoint, setProductsEndpoint] = useState("/printer_products");
-  const [intervalMinutes, setIntervalMinutes] = useState(60);
-  const [printerId, setPrinterId] = useState("");
-  const [apiKey, setApiKey] = useState("");
-
-  const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
 
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [syncResult, setSyncResult] = useState<string | null>(null);
 
-  async function load() {
-    setLoading(true);
+  const resetMessages = useCallback(() => {
     setError(null);
     setSuccess(null);
-    setSyncResult(null);
+  }, []);
+
+  const loadSettings = useCallback(async () => {
+    setLoading(true);
+    resetMessages();
 
     try {
-      const res = await fetch("/api/settings/xano", { cache: "no-store" });
-      if (!res.ok) throw new Error();
-      const json: XanoSettings = await res.json();
+      const res = await fetch("/api/settings/network", { cache: "no-store" });
+      if (!res.ok) throw new Error(`GET failed: ${res.status}`);
+      const json: NetworkSettings = await res.json();
 
-      setEnabled(Boolean(json.enabled));
-      setBaseUrl(json.baseUrl || "");
-      setProductsEndpoint(json.productsEndpoint || "/printer_products");
-      setIntervalMinutes(Number(json.intervalMinutes ?? 60));
-      setPrinterId(json.printerId || "");
-      setApiKey(json.apiKey || "");
-      setLastSyncAt(json.lastSyncAt ?? null);
+      setData(json);
+      setPrinterIp(json.printerIp ?? "");
     } catch {
-      setError("Fehler beim Laden der Xano-Einstellungen.");
+      setError("Konnte Netzwerk-Einstellungen nicht laden.");
     } finally {
       setLoading(false);
     }
-  }
+  }, [resetMessages]);
 
   useEffect(() => {
-    load();
-  }, []);
+    loadSettings();
+  }, [loadSettings]);
 
-  async function saveSettings() {
+  const printerIpValid = useMemo(
+    () => printerIp.length === 0 || isValidIPv4(printerIp),
+    [printerIp]
+  );
+
+  const hasChanges = useMemo(() => {
+    if (!data) return false;
+    return (data.printerIp ?? "") !== printerIp;
+  }, [data, printerIp]);
+
+  const canSave = printerIpValid && hasChanges && !saving;
+
+  const saveSettings = useCallback(async () => {
     setSaving(true);
-    setError(null);
-    setSuccess(null);
-    setSyncResult(null);
+    resetMessages();
 
     try {
-      const res = await fetch("/api/settings/xano", {
+      const payload = { printerIp: printerIp.trim() };
+
+      const res = await fetch("/api/settings/network", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          enabled,
-          baseUrl: baseUrl.trim(),
-          productsEndpoint: productsEndpoint.trim(),
-          intervalMinutes: Number(intervalMinutes),
-          printerId: printerId.trim(),
-          apiKey: apiKey.trim(),
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
         const msg = await res.text().catch(() => "");
-        throw new Error(msg);
+        throw new Error(msg || `POST failed: ${res.status}`);
       }
 
-      setSuccess("Xano-Einstellungen gespeichert.");
-      await load();
-
-      // Falls SideNav serverseitige Daten nutzt, ebenfalls refreshen
-      router.refresh();
-    } catch {
-      setError("Speichern fehlgeschlagen.");
+      setSuccess("Gespeichert.");
+      await loadSettings();
+    } catch (e: any) {
+      setError(
+        e?.message?.includes("validation")
+          ? "Bitte eine gültige Drucker-IP eingeben."
+          : e?.message || "Speichern fehlgeschlagen."
+      );
     } finally {
       setSaving(false);
     }
+  }, [printerIp, resetMessages, loadSettings]);
+
+  if (loading) {
+    return (
+      <div className="p-4">
+        <div className="max-w-3xl">
+          <div className="animate-pulse rounded-xl border bg-white p-6 shadow-sm">
+            <div className="h-5 w-40 rounded bg-gray-200" />
+            <div className="mt-4 h-10 w-full rounded bg-gray-100" />
+          </div>
+        </div>
+      </div>
+    );
   }
-
-  async function syncProducts() {
-    setSyncing(true);
-    setSyncResult(null);
-    setError(null);
-    setSuccess(null);
-
-    try {
-      const res = await fetch("/api/sync/xano-products", { method: "POST" });
-      if (!res.ok) {
-        const msg = await res.text().catch(() => "");
-        throw new Error(msg);
-      }
-
-      const json = await res.json();
-      setSyncResult(`Produkte abgerufen: ${json.count} Einträge.`);
-
-      await load();
-
-      // WICHTIG: triggert RSC/Layout neu -> SideNav wird neu geladen
-      router.refresh();
-    } catch (e: any) {
-      setError(e?.message || "Produkt-Sync fehlgeschlagen.");
-    } finally {
-      setSyncing(false);
-    }
-  }
-
-  if (loading) return <div className="p-4">Lade...</div>;
 
   return (
-    <div className="p-4 max-w-3xl space-y-4">
-      <div className="flex justify-between items-center">
-        <h1 className="text-lg font-semibold">Einstellungen</h1>
-        <button
-          onClick={load}
-          className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 active:scale-[0.98]"
-        >
-          <RefreshCcw className="w-4 h-4" /> Neu laden
-        </button>
-      </div>
+    <div className="p-4">
+      <div className="max-w-3xl space-y-4">
+        <div className="flex items-center justify-between">
+          <h1 className="text-lg font-semibold text-gray-900">Netzwerk</h1>
+          <button
+            onClick={loadSettings}
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 active:scale-[0.98]"
+          >
+            <RefreshCcw className="h-4 w-4" />
+            Neu laden
+          </button>
+        </div>
 
-      <div className="flex items-start gap-2 p-3 bg-blue-50 text-blue-900 rounded-lg border border-blue-200 text-sm">
-        <Info className="w-4 h-4 mt-0.5" />
-        <p>Hier konfigurierst du den Xano-Sync. Printer ID ist dein auth_token.</p>
-      </div>
+        <div className="flex items-start gap-2 rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+          <Info className="mt-0.5 h-4 w-4" />
+          <div>Hier konfigurierst du nur die Drucker-IP.</div>
+        </div>
 
-      <section className="p-5 bg-white border border-gray-200 rounded-xl shadow-sm space-y-4">
-        {/* Enabled toggle */}
-        <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-          <div>
-            <div className="text-sm font-medium text-gray-800">
-              Xano Sync aktiv
+        <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">
+                Drucker-IP
+              </label>
+              <div
+                className={[
+                  "flex items-center gap-2 rounded-lg border px-3 py-2",
+                  printerIpValid
+                    ? "border-gray-200 bg-white"
+                    : "border-red-300 bg-red-50",
+                ].join(" ")}
+              >
+                <Printer className="h-4 w-4 text-gray-500" />
+                <input
+                  type="text"
+                  value={printerIp}
+                  onChange={(e) => {
+                    setPrinterIp(e.target.value);
+                    resetMessages();
+                  }}
+                  placeholder="z. B. 192.168.10.20"
+                  className="w-full bg-transparent text-sm text-gray-900 outline-none placeholder:text-gray-400"
+                  inputMode="decimal"
+                />
+              </div>
+
+              {!printerIpValid && (
+                <p className="mt-1 text-xs text-red-600">
+                  Bitte eine gültige IPv4-Adresse eingeben.
+                </p>
+              )}
             </div>
+          </div>
+
+          <div className="mt-5 flex items-center justify-between">
             <div className="text-xs text-gray-500">
-              Wenn deaktiviert, wird kein Produktabruf durchgeführt.
+              Änderungen werden sofort in der Konfiguration gespeichert.
             </div>
+
+            <button
+              onClick={saveSettings}
+              disabled={!canSave}
+              className={[
+                "inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium shadow-sm transition",
+                canSave
+                  ? "bg-gray-900 text-white hover:bg-gray-800 active:scale-[0.98]"
+                  : "bg-gray-200 text-gray-500 cursor-not-allowed",
+              ].join(" ")}
+            >
+              <Save className="h-4 w-4" />
+              {saving ? "Speichern..." : "Speichern"}
+            </button>
           </div>
-          <button
-            onClick={() => {
-              setEnabled((v) => !v);
-              setSuccess(null);
-              setError(null);
-              setSyncResult(null);
-            }}
-            className="inline-flex items-center gap-2 rounded-lg bg-white border border-gray-200 px-3 py-2 text-sm shadow-sm hover:bg-gray-50"
-            aria-label="Toggle Xano sync"
-          >
-            {enabled ? (
-              <>
-                <ToggleRight className="h-5 w-5 text-green-600" />
-                An
-              </>
-            ) : (
-              <>
-                <ToggleLeft className="h-5 w-5 text-gray-500" />
-                Aus
-              </>
-            )}
-          </button>
-        </div>
 
-        {/* Base URL */}
-        <div>
-          <label className="block text-sm font-medium mb-1 text-gray-700">
-            Xano Base URL
-          </label>
-          <KeyboardInput
-            value={baseUrl}
-            onValueChange={(v) => {
-              setBaseUrl(v);
-              setSuccess(null);
-              setError(null);
-              setSyncResult(null);
-            }}
-            className="w-full border border-gray-200 px-3 py-2 rounded-lg bg-white text-sm"
-            placeholder="https://api.saf-tepasse.de/api:..."
-          />
-          <p className="mt-1 text-xs text-gray-500">
-            Beispiel: https://api.saf-tepasse.de/api:j-HmV1Vn
-          </p>
-        </div>
-
-        {/* Endpoint */}
-        <div>
-          <label className="block text-sm font-medium mb-1 text-gray-700">
-            Endpunkt
-          </label>
-          <KeyboardInput
-            value={productsEndpoint}
-            onValueChange={(v) => {
-              setProductsEndpoint(v);
-              setSuccess(null);
-              setError(null);
-              setSyncResult(null);
-            }}
-            className="w-full border border-gray-200 px-3 py-2 rounded-lg bg-white text-sm"
-            placeholder="/printer_products"
-          />
-          <p className="mt-1 text-xs text-gray-500">
-            Wird an die Base URL gehängt.
-          </p>
-        </div>
-
-        {/* Printer ID */}
-        <div>
-          <label className="block text-sm font-medium mb-1 text-gray-700">
-            Printer ID
-          </label>
-          <div className="flex items-center gap-2 border border-gray-200 px-3 py-2 rounded-lg bg-white">
-            <Link2 className="w-4 h-4 text-gray-500" />
-            <KeyboardInput
-              value={printerId}
-              onValueChange={(v) => {
-                setPrinterId(v);
-                setSuccess(null);
-                setError(null);
-                setSyncResult(null);
-              }}
-              className="w-full bg-transparent text-sm outline-none"
-              placeholder="He1NDNzs4nWQC2uS86KC1CXaOxMtx2..."
-            />
-          </div>
-        </div>
-
-        {/* Buttons */}
-        <div className="flex gap-2">
-          <button
-            onClick={saveSettings}
-            disabled={saving}
-            className="inline-flex items-center gap-2 bg-gray-900 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm hover:bg-gray-800 active:scale-[0.98] disabled:opacity-60"
-          >
-            <Save className="w-4 h-4" />
-            {saving ? "Speichern..." : "Speichern"}
-          </button>
-
-          <button
-            onClick={syncProducts}
-            disabled={syncing}
-            className="inline-flex items-center gap-2 bg-white border border-gray-200 px-4 py-2 rounded-lg text-sm font-medium shadow-sm hover:bg-gray-50 active:scale-[0.98] disabled:opacity-60"
-          >
-            <Download className="w-4 h-4" />
-            {syncing ? "Abrufen..." : "Produkte abrufen"}
-          </button>
-        </div>
-
-        {/* Status */}
-        {lastSyncAt && (
-          <div className="text-xs text-gray-500">
-            Letzter Sync: {new Date(lastSyncAt).toLocaleString("de-DE")}
-          </div>
-        )}
-
-        {success && (
-          <div className="p-3 bg-green-50 border border-green-200 text-green-800 rounded-lg text-sm">
-            {success}
-          </div>
-        )}
-        {error && (
-          <div className="p-3 bg-red-50 border border-red-200 text-red-800 rounded-lg text-sm">
-            {error}
-          </div>
-        )}
-        {syncResult && (
-          <div className="p-3 bg-green-50 border border-green-200 text-green-800 rounded-lg text-sm">
-            {syncResult}
-          </div>
-        )}
-      </section>
+          {(error || success) && (
+            <div className="mt-4 space-y-2">
+              {error && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+                  {error}
+                </div>
+              )}
+              {success && (
+                <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
+                  {success}
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+      </div>
     </div>
   );
 }

@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Save, Printer, Info, RefreshCcw } from "lucide-react";
-import KeyboardInput from "@/app/components/KeyboardInput";
 
 type NetworkSettings = {
   printerIp: string;
@@ -145,14 +144,16 @@ export default function NetworkSettingsPage() {
                 ].join(" ")}
               >
                 <Printer className="h-4 w-4 text-gray-500" />
-                <KeyboardInput
+                <input
+                  type="text"
                   value={printerIp}
-                  onValueChange={(v) => {
-                    setPrinterIp(v);
+                  onChange={(e) => {
+                    setPrinterIp(e.target.value);
                     resetMessages();
                   }}
                   placeholder="z. B. 192.168.10.20"
                   className="w-full bg-transparent text-sm text-gray-900 outline-none placeholder:text-gray-400"
+                  inputMode="decimal"
                 />
               </div>
 
