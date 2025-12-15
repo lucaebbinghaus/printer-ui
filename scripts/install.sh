@@ -92,6 +92,16 @@ git submodule sync --recursive
 git submodule update --init --recursive
 
 # -------------------------------------------------
+# X) Host Node deps installieren (für Electron)
+# -------------------------------------------------
+log "[X/12] Install Node dependencies on host (for Electron)"
+cd "$TARGET_DIR"
+
+# Wichtig: als APP_USER, damit node_modules nicht root gehört
+sudo -u "$APP_USER" npm install
+
+
+# -------------------------------------------------
 # 5) Skripte ausführbar
 # -------------------------------------------------
 log "[5/12] Make scripts executable"
