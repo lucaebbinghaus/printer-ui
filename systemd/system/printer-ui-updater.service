@@ -7,7 +7,7 @@ Type=simple
 WorkingDirectory=/opt/printer-ui
 Environment=UPDATER_HOST=127.0.0.1
 Environment=UPDATER_PORT=9123
-Environment=UPDATER_TOKEN=CHANGE_ME_LONG_RANDOM_TOKEN
+Environment=UPDATER_TOKEN=ITg2pFuqtibvIovV2Z3oPjJAU6K6EaD2cfjoRa9cId9ZUgSGfezR1rOfe1bvxo0K
 ExecStart=/usr/bin/python3 /opt/printer-ui/scripts/updaterd.py
 Restart=always
 RestartSec=2

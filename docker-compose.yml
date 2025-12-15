@@ -15,7 +15,7 @@ services:
 
       # Host-Updater (UI trigger)
       - UPDATER_BASE_URL=http://host.docker.internal:9123
-      - UPDATER_TOKEN=CHANGE_ME_LONG_RANDOM_TOKEN
+      - UPDATER_TOKEN=ITg2pFuqtibvIovV2Z3oPjJAU6K6EaD2cfjoRa9cId9ZUgSGfezR1rOfe1bvxo0K
 
     extra_hosts:
       - "host.docker.internal:host-gateway"
