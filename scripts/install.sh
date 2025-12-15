@@ -48,9 +48,17 @@ fi
 # -------------------------------------------------
 # 2) Host Dependencies: node/npm/curl/python3
 # -------------------------------------------------
-log "[2/15] Ensure host deps installed (nodejs/npm/curl/python3)"
-sudo apt update
-sudo apt install -y nodejs npm curl python3
+sudo apt install -y curl python3
+
+# Node über NodeSource (npm ist enthalten, KEIN apt npm installieren)
+if ! command -v node >/dev/null 2>&1; then
+  log "[2/15] Installing Node.js 20 (NodeSource)"
+  curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+  sudo apt install -y nodejs
+fi
+
+log "[2/15] Node: $(node -v 2>/dev/null || echo missing)  NPM: $(npm -v 2>/dev/null || echo missing)"
+
 
 # -------------------------------------------------
 # 3) User in docker-Gruppe
