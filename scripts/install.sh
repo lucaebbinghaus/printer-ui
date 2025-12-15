@@ -47,6 +47,17 @@ if ! docker compose version >/dev/null 2>&1; then
   log "ERROR: docker compose plugin missing"
   exit 1
 fi
+# -------------------------------------------------
+# 1.5) Node.js + npm (für Electron Host-App)
+# -------------------------------------------------
+if ! has_cmd node || ! has_cmd npm; then
+  log "[1.5/12] Node.js / npm not found → installing"
+
+  sudo apt update
+  sudo apt install -y nodejs npm
+else
+  log "[1.5/12] Node.js / npm already installed"
+fi
 
 # -------------------------------------------------
 # 2) User zur docker-Gruppe hinzufügen
