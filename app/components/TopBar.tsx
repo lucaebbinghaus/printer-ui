@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
 import { NAV_ITEMS } from "./nav";
 import {
@@ -45,14 +46,20 @@ export default function TopBar() {
 
   const [cancelling, setCancelling] = useState(false);
   const [tempMessage, setTempMessage] = useState<string | null>(null);
-
   const [isFullscreen, setIsFullscreen] = useState(true);
+
+  // Portal mount flag
+  const [mounted, setMounted] = useState(false);
 
   const electronAPI =
     typeof window !== "undefined" ? (window as any).electronAPI : null;
 
   const isLabelsPage =
     pathname === "/labels" || pathname.startsWith("/labels/");
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   /* -------- initial Fullscreen-Status -------- */
 
@@ -63,6 +70,7 @@ export default function TopBar() {
       .getFullscreenState()
       .then((v: boolean) => setIsFullscreen(Boolean(v)))
       .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* -------- Resize Toggle -------- */
@@ -80,6 +88,8 @@ export default function TopBar() {
   /* -------- Cancel Jobs -------- */
 
   async function handleCancelJobs() {
+    if (cancelling) return;
+
     setCancelling(true);
     try {
       const res = await fetch("/api/print/cancel", { method: "POST" });
@@ -207,26 +217,35 @@ export default function TopBar() {
         </div>
       </header>
 
-      {/* CANCEL – fixed unten rechts */}
-      {isLabelsPage && (
-        <button
-          aria-label="Alle Druckjobs abbrechen"
-          title="Alle Druckjobs abbrechen"
-          disabled={cancelling}
-          onClick={handleCancelJobs}
-          className={[
-            "fixed z-[2000] pointer-events-auto",
-            "right-6 bottom-6",
-            "[-webkit-app-region:no-drag]",
-            "inline-flex h-14 w-14 items-center justify-center rounded-2xl",
-            "border border-red-200 bg-white text-red-600 shadow-xl",
-            "hover:bg-red-50 active:scale-[0.97]",
-            "disabled:opacity-60",
-          ].join(" ")}
-        >
-          <OctagonX className="h-6 w-6" />
-        </button>
-      )}
+      {/* CANCEL – per Portal direkt nach <body>, damit garantiert klickbar */}
+      {mounted && isLabelsPage
+        ? createPortal(
+            <div
+              className="fixed right-6 bottom-6 pointer-events-none"
+              style={{ zIndex: 2147483647 }}
+            >
+              <button
+                aria-label="Alle Druckjobs abbrechen"
+                title="Alle Druckjobs abbrechen"
+                disabled={cancelling}
+                onClick={handleCancelJobs}
+                onPointerDown={(e) => e.stopPropagation()}
+                className={[
+                  "pointer-events-auto",
+                  "[-webkit-app-region:no-drag]",
+                  "inline-flex h-14 w-14 items-center justify-center rounded-2xl",
+                  "border border-red-200 bg-white text-red-600 shadow-xl",
+                  "hover:bg-red-50 active:scale-[0.97]",
+                  "disabled:opacity-60",
+                  "touch-manipulation",
+                ].join(" ")}
+              >
+                <OctagonX className="h-6 w-6" />
+              </button>
+            </div>,
+            document.body
+          )
+        : null}
     </>
   );
 }

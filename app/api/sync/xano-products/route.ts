@@ -1,10 +1,43 @@
 // app/api/sync/xano-products/route.ts
 
 import { NextResponse } from "next/server";
-import { writeProducts, type Preset } from "@/app/lib/productsStore";
+import crypto from "crypto";
+
 import { getConfig, saveConfig } from "@/app/lib/storage";
+import { createBackupFromCurrentProducts, pruneBackupsKeepLatest } from "@/app/lib/productsBackups";
+import { getProducts, saveProducts, type ProductsFile } from "@/app/lib/storage";
 
 export const runtime = "nodejs";
+
+// Falls du ein striktes Preset-Interface hast, hier ersetzen.
+// Aktuell nehmen wir "any", damit Xano-Shape flexibel bleibt.
+type Preset = any;
+
+function stableStringify(value: any): string {
+  // Stabiler JSON-String: sortiert Object-Keys rekursiv (damit Hash stabil bleibt)
+  const seen = new WeakSet();
+
+  const normalize = (v: any): any => {
+    if (v === null || typeof v !== "object") return v;
+
+    if (seen.has(v)) return v;
+    seen.add(v);
+
+    if (Array.isArray(v)) return v.map(normalize);
+
+    const keys = Object.keys(v).sort();
+    const out: Record<string, any> = {};
+    for (const k of keys) out[k] = normalize(v[k]);
+    return out;
+  };
+
+  return JSON.stringify(normalize(value));
+}
+
+function computeHash(items: Preset[]): string {
+  const s = stableStringify(items);
+  return crypto.createHash("sha256").update(s).digest("hex");
+}
 
 export async function POST() {
   try {
@@ -34,7 +67,6 @@ export async function POST() {
 
     console.log("[sync] Xano sync URL:", url);
 
-    // Request
     const res = await fetch(url, {
       headers: {
         ...(xano.apiKey ? { Authorization: `Bearer ${xano.apiKey}` } : {}),
@@ -43,7 +75,6 @@ export async function POST() {
       cache: "no-store",
     });
 
-    // Nur für Logging Response als Text erfassen
     const rawText = await res.text();
 
     if (!res.ok) {
@@ -58,7 +89,7 @@ export async function POST() {
     let json: any;
     try {
       json = JSON.parse(rawText);
-    } catch (err) {
+    } catch {
       console.error("[sync] JSON parse error:", rawText);
       return new NextResponse("Xano returned invalid JSON.", { status: 500 });
     }
@@ -77,18 +108,78 @@ export async function POST() {
 
     console.log("[sync] Received items:", items.length);
 
-    // → Schreibvorgang in zentrale Datei (wichtig!)
-    await writeProducts(items);
+    // ---- Aktuellen Stand aus storage.ts laden (dein products.json Schema) ----
+    const currentFile = await getProducts<Preset>([]);
+    const currentItems = Array.isArray(currentFile?.items) ? currentFile.items : [];
 
-    // Config aktualisieren
+    // ---- Change detection (Hash) ----
+    const oldHash = computeHash(currentItems);
+    const newHash = computeHash(items);
+    const changed = oldHash !== newHash;
+
+    const nowIso = new Date().toISOString();
+
+    if (!changed) {
+      // Nur Config-Zeitstempel aktualisieren
+      await saveConfig({
+        ...config,
+        sync: {
+          ...config.sync,
+          xano: {
+            ...config.sync.xano,
+            lastSyncAt: nowIso,
+            lastSyncChanged: false,
+          },
+        },
+        products: {
+          ...config.products,
+          currentHash: oldHash,
+          // falls vorher Restore aktiv war, bleibt das so, sonst null
+          currentFromBackupId: config.products?.currentFromBackupId ?? null,
+        },
+      });
+
+      console.log("[/api/sync/xano-products] DONE - no changes");
+      return NextResponse.json({
+        ok: true,
+        changed: false,
+        count: items.length,
+        hash: newHash,
+      });
+    }
+
+    // ---- Backup aktueller Stand (vor Überschreiben) ----
+    const backup = await createBackupFromCurrentProducts();
+    await pruneBackupsKeepLatest(10);
+
+    // ---- Schreiben im storage.ts Format (ProductsFile) ----
+    const nextFile: ProductsFile<Preset> = {
+      version: currentFile?.version ?? 1,
+      items,
+      meta: {
+        source: "xano",
+        lastUpdatedAt: nowIso,
+      },
+    };
+
+    await saveProducts(nextFile);
+
+    // ---- Config aktualisieren ----
     await saveConfig({
       ...config,
       sync: {
         ...config.sync,
         xano: {
-          ...xano,
-          lastSyncAt: new Date().toISOString(),
+          ...config.sync.xano,
+          lastSyncAt: nowIso,
+          lastSyncChanged: true,
         },
+      },
+      products: {
+        ...config.products,
+        currentHash: newHash,
+        currentFromBackupId: null, // nach Sync wieder "live"
+        lastBackupId: backup?.id || null,
       },
     });
 
@@ -96,9 +187,11 @@ export async function POST() {
 
     return NextResponse.json({
       ok: true,
+      changed: true,
       count: items.length,
+      hash: newHash,
+      backupCreated: backup?.id || null,
     });
-
   } catch (err: any) {
     console.error("[/api/sync/xano-products] FAILED:", err);
     return new NextResponse(

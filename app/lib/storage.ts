@@ -92,7 +92,7 @@ export type AppConfig = {
   ui: {
     language: string;
     theme: "light" | "dark";
-    startPresetId: string | null;   // <--- NEU
+    startPresetId: string | null;
   };
 
   sync: {
@@ -104,7 +104,19 @@ export type AppConfig = {
       intervalMinutes: number;
       lastSyncAt: string | null;
       printerId: string; // auth token = printerId
+
+      // OPTIONAL (für "nur schreiben wenn geändert")
+      lastSyncChanged?: boolean;
     };
+  };
+
+  // OPTIONAL (für Backups/Restore + Hash)
+  products?: {
+    currentHash?: string;
+    currentFromBackupId?: string | null;
+    lastBackupId?: string | null;
+    lastRestoreAt?: string | null;
+    safetyBackupId?: string | null;
   };
 };
 
@@ -145,7 +157,16 @@ const DEFAULT_CONFIG: AppConfig = {
       intervalMinutes: 60,
       lastSyncAt: null,
       printerId: "He1NDNzs4nWQC2uS86KC1CXaOxMtx2",
+      lastSyncChanged: false,
     },
+  },
+
+  products: {
+    currentHash: "",
+    currentFromBackupId: null,
+    lastBackupId: null,
+    lastRestoreAt: null,
+    safetyBackupId: null,
   },
 };
 
@@ -179,6 +200,10 @@ function migrateConfig(raw: any): AppConfig {
         ...DEFAULT_CONFIG.sync.xano,
         ...(raw.sync?.xano || {}),
       },
+    },
+    products: {
+      ...DEFAULT_CONFIG.products,
+      ...(raw.products || {}),
     },
   };
 

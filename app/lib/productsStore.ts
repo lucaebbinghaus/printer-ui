@@ -1,60 +1,57 @@
 // app/lib/productsStore.ts
-import fs from "fs/promises";
+import { promises as fs } from "fs";
 import path from "path";
+import crypto from "crypto";
 
-export type PrinterProduct = any;
+export type Preset = any; // bleibt flexibel; falls du ein Preset-Interface hast, hier ersetzen
 
-export type Preset = {
-  id: number;
-  created_at: number;
-  name: string;
-  product_ids: PrinterProduct[];
-  enabled: boolean;
-};
+const DATA_DIR = path.join(process.cwd(), "data");
+export const PRODUCTS_FILE = path.join(DATA_DIR, "products.json");
 
-const DEFAULT_PRODUCTS = { items: [] as Preset[] };
+async function ensureDataDir() {
+  await fs.mkdir(DATA_DIR, { recursive: true });
+}
 
-// WICHTIG: APP_DATA_DIR IMMER GLEICH NUTZEN
-const APP_DATA_DIR =
-  process.env.APP_DATA_DIR || path.join(process.cwd(), "data");
+export function stableStringify(value: any): string {
+  // Stabiler JSON-String: sortiert Object-Keys rekursiv
+  const seen = new WeakSet();
 
-const PRODUCTS_FILE = path.join(APP_DATA_DIR, "products.json");
+  const normalize = (v: any): any => {
+    if (v === null || typeof v !== "object") return v;
 
-async function ensureProductsFileExists() {
-  await fs.mkdir(APP_DATA_DIR, { recursive: true });
-  try {
-    await fs.access(PRODUCTS_FILE);
-  } catch {
-    await fs.writeFile(
-      PRODUCTS_FILE,
-      JSON.stringify(DEFAULT_PRODUCTS, null, 2),
-      "utf-8"
-    );
-  }
+    if (seen.has(v)) return v; // Zyklen ignorieren (sollte nicht vorkommen)
+    seen.add(v);
+
+    if (Array.isArray(v)) return v.map(normalize);
+
+    const keys = Object.keys(v).sort();
+    const out: Record<string, any> = {};
+    for (const k of keys) out[k] = normalize(v[k]);
+    return out;
+  };
+
+  return JSON.stringify(normalize(value));
+}
+
+export function computeProductsHash(items: Preset[]): string {
+  const s = stableStringify(items);
+  return crypto.createHash("sha256").update(s).digest("hex");
 }
 
 export async function readProducts(): Promise<Preset[]> {
+  await ensureDataDir();
   try {
-    await ensureProductsFileExists();
-    console.log("[readProducts] FILE:", PRODUCTS_FILE);
-
-    const raw = await fs.readFile(PRODUCTS_FILE, "utf-8");
+    const raw = await fs.readFile(PRODUCTS_FILE, "utf8");
     const json = JSON.parse(raw);
-    if (!json || !Array.isArray(json.items)) {
-      console.warn("[readProducts] Invalid format, returning []");
-      return [];
-    }
-    console.log("[readProducts] count:", json.items.length);
-    return json.items as Preset[];
-  } catch (err) {
-    console.error("[readProducts] ERROR:", err);
-    return [];
+    return Array.isArray(json) ? json : [];
+  } catch (e: any) {
+    if (e?.code === "ENOENT") return [];
+    throw e;
   }
 }
 
 export async function writeProducts(items: Preset[]): Promise<void> {
-  await ensureProductsFileExists();
-  const payload = { items };
-  console.log("[writeProducts] Writing", items.length, "items to", PRODUCTS_FILE);
-  await fs.writeFile(PRODUCTS_FILE, JSON.stringify(payload, null, 2), "utf-8");
+  await ensureDataDir();
+  const payload = JSON.stringify(items, null, 2);
+  await fs.writeFile(PRODUCTS_FILE, payload, "utf8");
 }
