@@ -1,15 +1,17 @@
 [Unit]
 Description=Printer UI Electron Kiosk
 After=graphical.target printer-ui.service
+Wants=graphical.target
 Requires=printer-ui.service
 
 [Service]
 Type=simple
-User=%i
+User=@APP_USER@
 Environment=DISPLAY=:0
+WorkingDirectory=/opt/printer-ui
 ExecStart=/opt/printer-ui/electron/start.sh
 Restart=always
-RestartSec=5
+RestartSec=3
 
 [Install]
 WantedBy=graphical.target

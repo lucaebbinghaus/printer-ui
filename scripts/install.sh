@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# -------------------------------------------------
+# Grundkonfiguration
+# -------------------------------------------------
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TARGET_DIR="/opt/printer-ui"
 APP_USER="${APP_USER:-$(logname 2>/dev/null || whoami)}"
@@ -17,7 +20,7 @@ log "App user:    $APP_USER"
 # 1) Docker automatisch installieren (falls fehlt)
 # -------------------------------------------------
 if ! has_cmd docker; then
-  log "[1/10] Docker not found -> installing (official repo)"
+  log "[1/12] Docker not found → installing (official repo)"
 
   sudo apt update
   sudo apt install -y ca-certificates curl gnupg
@@ -37,30 +40,30 @@ if ! has_cmd docker; then
   sudo apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
   sudo systemctl enable --now docker
 else
-  log "[1/10] Docker already installed"
+  log "[1/12] Docker already installed"
 fi
 
-# docker compose plugin check
+# docker compose Plugin prüfen
 if ! docker compose version >/dev/null 2>&1; then
-  log "ERROR: docker compose plugin missing even after install."
+  log "ERROR: docker compose plugin missing"
   exit 1
 fi
 
 # -------------------------------------------------
-# 2) User in docker group (für docker ohne sudo)
+# 2) User in docker-Gruppe
 # -------------------------------------------------
 if ! groups "$APP_USER" | grep -q docker; then
-  log "[2/10] Adding $APP_USER to docker group"
+  log "[2/12] Adding $APP_USER to docker group"
   sudo usermod -aG docker "$APP_USER"
-  log "NOTE: Logout/Login required for docker group to apply."
+  log "NOTE: Logout/Login required for docker group to apply"
 else
-  log "[2/10] User already in docker group"
+  log "[2/12] User already in docker group"
 fi
 
 # -------------------------------------------------
 # 3) Repo nach /opt spiegeln (idempotent)
 # -------------------------------------------------
-log "[3/10] Sync repo to $TARGET_DIR"
+log "[3/12] Sync repo to $TARGET_DIR"
 sudo mkdir -p "$TARGET_DIR"
 sudo rsync -a --delete \
   --exclude '.git' \
@@ -71,56 +74,80 @@ sudo rsync -a --delete \
 sudo chown -R "$APP_USER:$APP_USER" "$TARGET_DIR"
 
 # -------------------------------------------------
-# 4) Submodule holen (WICHTIG für zplbox/opcua)
+# 4) Git Submodule holen (zplbox, opcua-client)
 # -------------------------------------------------
-log "[4/10] Update git submodules"
+log "[4/12] Update git submodules"
 cd "$TARGET_DIR"
 git submodule sync --recursive
 git submodule update --init --recursive
 
 # -------------------------------------------------
-# 5) Scripts ausführbar
+# 5) Scripts ausführbar machen
 # -------------------------------------------------
-log "[5/10] Make scripts executable"
+log "[5/12] Make scripts executable"
 sudo chmod +x "$TARGET_DIR/scripts/"*.sh
 
 # -------------------------------------------------
-# 6) systemd Units installieren
+# 6) systemd Units installieren (User einsetzen!)
 # -------------------------------------------------
-log "[6/10] Install systemd units"
-sudo install -m 0644 "$TARGET_DIR/systemd/printer-ui.service" /etc/systemd/system/printer-ui.service
-sudo install -m 0644 "$TARGET_DIR/systemd/printer-ui-electron.service" /etc/systemd/system/printer-ui-electron.service
-sudo install -m 0644 "$TARGET_DIR/systemd/printer-ui-update.service" /etc/systemd/system/printer-ui-update.service
+log "[6/12] Install systemd units (user substitution)"
+
+APP_USER_ESCAPED="$(printf '%s\n' "$APP_USER" | sed 's/[\/&]/\\&/g')"
+
+sed "s/@APP_USER@/$APP_USER_ESCAPED/g" \
+  "$TARGET_DIR/systemd/printer-ui.service.in" \
+  | sudo tee /etc/systemd/system/printer-ui.service >/dev/null
+
+sed "s/@APP_USER@/$APP_USER_ESCAPED/g" \
+  "$TARGET_DIR/systemd/printer-ui-electron.service.in" \
+  | sudo tee /etc/systemd/system/printer-ui-electron.service >/dev/null
+
+sed "s/@APP_USER@/$APP_USER_ESCAPED/g" \
+  "$TARGET_DIR/systemd/printer-ui-update.service.in" \
+  | sudo tee /etc/systemd/system/printer-ui-update.service >/dev/null
+
 sudo systemctl daemon-reload
 sudo systemctl enable printer-ui.service
 sudo systemctl enable printer-ui-electron.service
 sudo systemctl enable printer-ui-update.service
 
 # -------------------------------------------------
-# 7) sudoers Drop-In installieren (für UI Update Trigger)
+# 7) sudoers Drop-In installieren
 # -------------------------------------------------
-log "[7/10] Install sudoers rule"
-sudo install -m 0440 "$TARGET_DIR/sudoers/printer-ui-update" /etc/sudoers.d/printer-ui-update
+log "[7/12] Install sudoers rule"
+sudo install -m 0440 \
+  "$TARGET_DIR/sudoers/printer-ui-update" \
+  /etc/sudoers.d/printer-ui-update
 
 # -------------------------------------------------
-# 8) Build images (damit kein Pull Mist passiert)
+# 8) Docker Images bauen
 # -------------------------------------------------
-log "[8/10] docker compose build"
+log "[8/12] docker compose build"
 cd "$TARGET_DIR"
 docker compose build
 
 # -------------------------------------------------
 # 9) Container starten
 # -------------------------------------------------
-log "[9/10] docker compose up -d"
+log "[9/12] docker compose up -d"
 docker compose up -d --remove-orphans
 
 # -------------------------------------------------
-# 10) Services starten
+# 10) systemd Services starten
 # -------------------------------------------------
-log "[10/10] Start services"
-sudo systemctl start printer-ui.service || true
-sudo systemctl start printer-ui-electron.service || true
+log "[10/12] Start services"
+sudo systemctl restart printer-ui.service || true
+sudo systemctl restart printer-ui-electron.service || true
 
-log "=== INSTALL DONE ==="
-log "If docker was newly installed: log out and log back in once."
+# -------------------------------------------------
+# 11) Status anzeigen
+# -------------------------------------------------
+log "[11/12] Service status"
+systemctl --no-pager status printer-ui.service || true
+systemctl --no-pager status printer-ui-electron.service || true
+
+# -------------------------------------------------
+# 12) Fertig
+# -------------------------------------------------
+log "[12/12] INSTALL DONE"
+log "If Docker was newly installed: log out and log back in once."
