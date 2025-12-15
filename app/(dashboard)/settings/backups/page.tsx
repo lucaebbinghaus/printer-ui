@@ -8,7 +8,7 @@ export default function BackupsPage() {
         <h1 className="text-lg font-semibold">Backups</h1>
         <p className="mt-1 text-sm text-gray-600">
           Hier kannst du ältere Produktdaten wiederherstellen. Es werden automatisch
-          bis zu 10 Backups gespeichert.999999
+          bis zu 10 Backups gespeichert.
         </p>
       </div>
 
