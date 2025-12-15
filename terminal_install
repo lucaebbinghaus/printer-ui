@@ -1,0 +1,24 @@
+# 1. Basis-Tools
+sudo apt update
+sudo apt install -y git curl
+
+# 2. Zielverzeichnis bereinigen
+sudo rm -rf /opt/printer-ui
+
+# 3. Repo klonen
+sudo git clone https://github.com/lucaebbinghaus/printer-ui.git /opt/printer-ui
+
+# 4. Ownership auf normalen User setzen
+sudo chown -R $USER:$USER /opt/printer-ui
+
+# 5. In das Repo wechseln
+cd /opt/printer-ui
+
+# 6. Submodule initialisieren (WICHTIG)
+git submodule update --init --recursive
+
+# 7. Installer ausführbar machen
+chmod +x scripts/install.sh
+
+# 8. Installer ausführen
+./scripts/install.sh
