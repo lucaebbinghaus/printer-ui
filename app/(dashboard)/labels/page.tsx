@@ -14,7 +14,7 @@ export default async function LabelsRootPage() {
   if (!items.length) {
     return (
       <div className="p-4">
-        Keine Presets vorhanden. Bitte zuerst Presets/Produkte anlegen.
+        Keine Presets vorhanden. Bitte zuerst Presets/Produkte abrufen.
       </div>
     );
   }
