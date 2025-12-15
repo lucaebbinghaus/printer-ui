@@ -170,8 +170,22 @@ log "[11/14] Enable linger for $APP_USER"
 sudo loginctl enable-linger "$APP_USER"
 
 log "[11/14] Enable/start user electron service"
-sudo -u "$APP_USER" systemctl --user daemon-reload
-sudo -u "$APP_USER" systemctl --user enable --now printer-ui-electron.service
+log "[11/14] Enable linger for $APP_USER"
+sudo loginctl enable-linger "$APP_USER"
+
+# User unit aktivieren/starten – nur wenn User-Bus erreichbar
+log "[11/14] Try enable/start user electron service"
+if sudo -u "$APP_USER" systemctl --user show-environment >/dev/null 2>&1; then
+  sudo -u "$APP_USER" systemctl --user daemon-reload
+  sudo -u "$APP_USER" systemctl --user enable --now printer-ui-electron.service
+  log "[11/14] User electron service enabled+started"
+else
+  log "[11/14] User bus not available now (no active user session)."
+  log "        The service will start automatically when the user session is created."
+  log "        Manual start (once logged into GUI):"
+  log "        systemctl --user daemon-reload && systemctl --user enable --now printer-ui-electron.service"
+fi
+
 
 # -------------------------------------------------
 # 12) Docker Images bauen + Container starten
