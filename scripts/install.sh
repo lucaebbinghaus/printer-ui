@@ -17,10 +17,10 @@ log "Target dir:  $TARGET_DIR"
 log "App user:    $APP_USER"
 
 # -------------------------------------------------
-# 1) Docker automatisch installieren (falls fehlt)
+# 1) Docker installieren (falls nötig)
 # -------------------------------------------------
 if ! has_cmd docker; then
-  log "[1/12] Docker not found → installing (official repo)"
+  log "[1/12] Docker not found → installing"
 
   sudo apt update
   sudo apt install -y ca-certificates curl gnupg
@@ -43,25 +43,24 @@ else
   log "[1/12] Docker already installed"
 fi
 
-# docker compose Plugin prüfen
 if ! docker compose version >/dev/null 2>&1; then
   log "ERROR: docker compose plugin missing"
   exit 1
 fi
 
 # -------------------------------------------------
-# 2) User in docker-Gruppe
+# 2) User zur docker-Gruppe hinzufügen
 # -------------------------------------------------
 if ! groups "$APP_USER" | grep -q docker; then
   log "[2/12] Adding $APP_USER to docker group"
   sudo usermod -aG docker "$APP_USER"
-  log "NOTE: Logout/Login required for docker group to apply"
+  log "NOTE: Logout/Login required for docker group"
 else
   log "[2/12] User already in docker group"
 fi
 
 # -------------------------------------------------
-# 3) Repo nach /opt spiegeln (idempotent)
+# 3) Repo nach /opt spiegeln
 # -------------------------------------------------
 log "[3/12] Sync repo to $TARGET_DIR"
 sudo mkdir -p "$TARGET_DIR"
@@ -74,23 +73,33 @@ sudo rsync -a --delete \
 sudo chown -R "$APP_USER:$APP_USER" "$TARGET_DIR"
 
 # -------------------------------------------------
-# 4) Git Submodule holen (zplbox, opcua-client)
+# 4) Submodule
 # -------------------------------------------------
-log "[4/12] Update git submodules"
+log "[4/12] Update submodules"
 cd "$TARGET_DIR"
 git submodule sync --recursive
 git submodule update --init --recursive
 
 # -------------------------------------------------
-# 5) Scripts ausführbar machen
+# 5) Skripte ausführbar
 # -------------------------------------------------
 log "[5/12] Make scripts executable"
 sudo chmod +x "$TARGET_DIR/scripts/"*.sh
+sudo chmod +x "$TARGET_DIR/electron-app/start.sh"
 
 # -------------------------------------------------
-# 6) systemd Units installieren (User einsetzen!)
+# 6) APP_USER zentral speichern
 # -------------------------------------------------
-log "[6/12] Install systemd units (user substitution)"
+log "[6/12] Write /etc/default/printer-ui"
+sudo tee /etc/default/printer-ui >/dev/null <<EOF
+APP_USER=$APP_USER
+EOF
+sudo chmod 0644 /etc/default/printer-ui
+
+# -------------------------------------------------
+# 7) systemd Units rendern & installieren
+# -------------------------------------------------
+log "[7/12] Install systemd units"
 
 APP_USER_ESCAPED="$(printf '%s\n' "$APP_USER" | sed 's/[\/&]/\\&/g')"
 
@@ -112,14 +121,6 @@ sudo systemctl enable printer-ui-electron.service
 sudo systemctl enable printer-ui-update.service
 
 # -------------------------------------------------
-# 7) sudoers Drop-In installieren
-# -------------------------------------------------
-log "[7/12] Install sudoers rule"
-sudo install -m 0440 \
-  "$TARGET_DIR/sudoers/printer-ui-update" \
-  /etc/sudoers.d/printer-ui-update
-
-# -------------------------------------------------
 # 8) Docker Images bauen
 # -------------------------------------------------
 log "[8/12] docker compose build"
@@ -133,14 +134,14 @@ log "[9/12] docker compose up -d"
 docker compose up -d --remove-orphans
 
 # -------------------------------------------------
-# 10) systemd Services starten
+# 10) Services starten
 # -------------------------------------------------
 log "[10/12] Start services"
 sudo systemctl restart printer-ui.service || true
 sudo systemctl restart printer-ui-electron.service || true
 
 # -------------------------------------------------
-# 11) Status anzeigen
+# 11) Status
 # -------------------------------------------------
 log "[11/12] Service status"
 systemctl --no-pager status printer-ui.service || true
@@ -150,4 +151,3 @@ systemctl --no-pager status printer-ui-electron.service || true
 # 12) Fertig
 # -------------------------------------------------
 log "[12/12] INSTALL DONE"
-log "If Docker was newly installed: log out and log back in once."
