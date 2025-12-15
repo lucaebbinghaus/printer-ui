@@ -13,6 +13,4 @@ for i in {1..60}; do
 done
 
 cd /opt/printer-ui
-
-# nutzt dein vorhandenes Script: "electron": "electron electron-app/main.js"
 exec npm run electron
