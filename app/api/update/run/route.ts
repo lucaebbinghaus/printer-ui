@@ -6,7 +6,13 @@ export const runtime = "nodejs";
 
 function runCmd(cmd: string) {
   return new Promise<void>((resolve, reject) => {
-    exec(cmd, (err) => (err ? reject(err) : resolve()));
+    exec(cmd, (err, stdout, stderr) => {
+      if (err) {
+        reject(new Error(stderr || err.message));
+      } else {
+        resolve();
+      }
+    });
   });
 }
 

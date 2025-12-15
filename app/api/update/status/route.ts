@@ -15,10 +15,19 @@ function execText(cmd: string) {
 
 export async function GET() {
   try {
-    // running?
-    const active = (await execText(
-      "sudo -n /bin/systemctl is-active printer-ui-update.service || true"
-    )).trim();
+    // systemd state details (robust for oneshot)
+    const show = await execText(
+      "sudo -n /bin/systemctl show printer-ui-update.service " +
+        "-p ActiveState -p SubState -p Result -p ExecMainStatus -p ExecMainCode -p ExecMainStartTimestamp -p ExecMainExitTimestamp || true"
+    );
+
+    const state: Record<string, string> = {};
+    for (const line of show.split("\n")) {
+      const i = line.indexOf("=");
+      if (i > 0) state[line.slice(0, i)] = line.slice(i + 1);
+    }
+
+    const running = state.ActiveState === "active" && state.SubState === "running";
 
     // Logs (letzte 200 Zeilen)
     const log = await execText(
@@ -27,7 +36,8 @@ export async function GET() {
 
     return NextResponse.json({
       ok: true,
-      running: active === "active",
+      running,
+      state,
       log,
     });
   } catch (err: any) {
