@@ -90,7 +90,13 @@ export async function getSideNav(): Promise<{
         href: "/settings/backups",
         icon: "RotateCcw",
       },
-      
+      {
+        key: "update",
+        label: "Update",
+        href: "/settings/update",
+        icon: "DownloadCloud",
+      },
+
     ],
   };
 }
