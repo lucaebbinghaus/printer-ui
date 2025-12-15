@@ -6,7 +6,6 @@ TARGET_DIR="/opt/printer-ui"
 APP_USER="${APP_USER:-$(logname 2>/dev/null || whoami)}"
 
 log() { echo "[$(date -Is)] $*"; }
-
 has_cmd() { command -v "$1" >/dev/null 2>&1; }
 
 log "=== INSTALL START ==="
@@ -18,52 +17,50 @@ log "App user:    $APP_USER"
 # 1) Docker automatisch installieren (falls fehlt)
 # -------------------------------------------------
 if ! has_cmd docker; then
-  log "[1/8] Docker not found -> installing Docker (official repo)"
+  log "[1/10] Docker not found -> installing (official repo)"
 
   sudo apt update
   sudo apt install -y ca-certificates curl gnupg
 
   sudo install -m 0755 -d /etc/apt/keyrings
-  curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+  curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+    | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
   sudo chmod a+r /etc/apt/keyrings/docker.gpg
 
   echo \
     "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
     https://download.docker.com/linux/ubuntu \
-    $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
-    sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
+    $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
+    | sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
 
   sudo apt update
   sudo apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
   sudo systemctl enable --now docker
 else
-  log "[1/8] Docker already installed"
+  log "[1/10] Docker already installed"
 fi
 
-# -------------------------------------------------
-# 2) docker compose plugin prüfen
-# -------------------------------------------------
+# docker compose plugin check
 if ! docker compose version >/dev/null 2>&1; then
   log "ERROR: docker compose plugin missing even after install."
   exit 1
 fi
 
 # -------------------------------------------------
-# 3) User in Docker-Gruppe (für docker ohne sudo)
+# 2) User in docker group (für docker ohne sudo)
 # -------------------------------------------------
 if ! groups "$APP_USER" | grep -q docker; then
-  log "[2/8] Adding $APP_USER to docker group"
+  log "[2/10] Adding $APP_USER to docker group"
   sudo usermod -aG docker "$APP_USER"
   log "NOTE: Logout/Login required for docker group to apply."
 else
-  log "[2/8] User already in docker group"
+  log "[2/10] User already in docker group"
 fi
 
 # -------------------------------------------------
-# 4) Repo nach /opt spiegeln (falls du von woanders installierst)
-#    Wenn du bereits in /opt/printer-ui bist, ist das ein No-Op.
+# 3) Repo nach /opt spiegeln (idempotent)
 # -------------------------------------------------
-log "[3/8] Sync repo to $TARGET_DIR"
+log "[3/10] Sync repo to $TARGET_DIR"
 sudo mkdir -p "$TARGET_DIR"
 sudo rsync -a --delete \
   --exclude '.git' \
@@ -74,15 +71,23 @@ sudo rsync -a --delete \
 sudo chown -R "$APP_USER:$APP_USER" "$TARGET_DIR"
 
 # -------------------------------------------------
+# 4) Submodule holen (WICHTIG für zplbox/opcua)
+# -------------------------------------------------
+log "[4/10] Update git submodules"
+cd "$TARGET_DIR"
+git submodule sync --recursive
+git submodule update --init --recursive
+
+# -------------------------------------------------
 # 5) Scripts ausführbar
 # -------------------------------------------------
-log "[4/8] Make scripts executable"
+log "[5/10] Make scripts executable"
 sudo chmod +x "$TARGET_DIR/scripts/"*.sh
 
 # -------------------------------------------------
 # 6) systemd Units installieren
 # -------------------------------------------------
-log "[5/8] Install systemd units"
+log "[6/10] Install systemd units"
 sudo install -m 0644 "$TARGET_DIR/systemd/printer-ui.service" /etc/systemd/system/printer-ui.service
 sudo install -m 0644 "$TARGET_DIR/systemd/printer-ui-electron.service" /etc/systemd/system/printer-ui-electron.service
 sudo install -m 0644 "$TARGET_DIR/systemd/printer-ui-update.service" /etc/systemd/system/printer-ui-update.service
@@ -92,21 +97,30 @@ sudo systemctl enable printer-ui-electron.service
 sudo systemctl enable printer-ui-update.service
 
 # -------------------------------------------------
-# 7) sudoers Drop-in installieren
+# 7) sudoers Drop-In installieren (für UI Update Trigger)
 # -------------------------------------------------
-log "[6/8] Install sudoers rule"
+log "[7/10] Install sudoers rule"
 sudo install -m 0440 "$TARGET_DIR/sudoers/printer-ui-update" /etc/sudoers.d/printer-ui-update
 
 # -------------------------------------------------
-# 8) Docker Compose up
+# 8) Build images (damit kein Pull Mist passiert)
 # -------------------------------------------------
-log "[7/8] docker compose up -d"
+log "[8/10] docker compose build"
 cd "$TARGET_DIR"
+docker compose build
+
+# -------------------------------------------------
+# 9) Container starten
+# -------------------------------------------------
+log "[9/10] docker compose up -d"
 docker compose up -d --remove-orphans
 
-log "[8/8] Start services"
+# -------------------------------------------------
+# 10) Services starten
+# -------------------------------------------------
+log "[10/10] Start services"
 sudo systemctl start printer-ui.service || true
 sudo systemctl start printer-ui-electron.service || true
 
 log "=== INSTALL DONE ==="
-log "If Docker was newly installed: log out and log back in once."
+log "If docker was newly installed: log out and log back in once."
