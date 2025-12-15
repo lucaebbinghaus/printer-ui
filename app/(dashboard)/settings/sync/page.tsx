@@ -1,6 +1,5 @@
 "use client";
 
-import KeyboardInput from "@/app/components/KeyboardInput";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -100,7 +99,6 @@ export default function SettingsPage() {
       setSuccess("Xano-Einstellungen gespeichert.");
       await load();
 
-      // Falls SideNav serverseitige Daten nutzt, ebenfalls refreshen
       router.refresh();
     } catch {
       setError("Speichern fehlgeschlagen.");
@@ -126,8 +124,6 @@ export default function SettingsPage() {
       setSyncResult(`Produkte abgerufen: ${json.count} Einträge.`);
 
       await load();
-
-      // WICHTIG: triggert RSC/Layout neu -> SideNav wird neu geladen
       router.refresh();
     } catch (e: any) {
       setError(e?.message || "Produkt-Sync fehlgeschlagen.");
@@ -195,10 +191,11 @@ export default function SettingsPage() {
           <label className="block text-sm font-medium mb-1 text-gray-700">
             Xano Base URL
           </label>
-          <KeyboardInput
+          <input
+            type="text"
             value={baseUrl}
-            onValueChange={(v) => {
-              setBaseUrl(v);
+            onChange={(e) => {
+              setBaseUrl(e.target.value);
               setSuccess(null);
               setError(null);
               setSyncResult(null);
@@ -216,10 +213,11 @@ export default function SettingsPage() {
           <label className="block text-sm font-medium mb-1 text-gray-700">
             Endpunkt
           </label>
-          <KeyboardInput
+          <input
+            type="text"
             value={productsEndpoint}
-            onValueChange={(v) => {
-              setProductsEndpoint(v);
+            onChange={(e) => {
+              setProductsEndpoint(e.target.value);
               setSuccess(null);
               setError(null);
               setSyncResult(null);
@@ -239,10 +237,11 @@ export default function SettingsPage() {
           </label>
           <div className="flex items-center gap-2 border border-gray-200 px-3 py-2 rounded-lg bg-white">
             <Link2 className="w-4 h-4 text-gray-500" />
-            <KeyboardInput
+            <input
+              type="text"
               value={printerId}
-              onValueChange={(v) => {
-                setPrinterId(v);
+              onChange={(e) => {
+                setPrinterId(e.target.value);
                 setSuccess(null);
                 setError(null);
                 setSyncResult(null);

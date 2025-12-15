@@ -4,6 +4,26 @@ const { exec } = require("child_process");
 
 let mainWindow;
 
+/* ===== On-Screen Keyboard (Ubuntu) via onboard ===== */
+let oskVisible = false;
+
+function oskShow() {
+  if (oskVisible) return;
+  oskVisible = true;
+
+  // onboard starten (falls schon läuft, ist es unkritisch)
+  // --xid: normaler Fenstermodus, gut für Kiosk
+  exec("onboard --xid >/dev/null 2>&1 &");
+}
+
+function oskHide() {
+  if (!oskVisible) return;
+  oskVisible = false;
+
+  // onboard beenden
+  exec("pkill -x onboard >/dev/null 2>&1 || true");
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -55,6 +75,12 @@ ipcMain.handle("host:shutdown", () => {
   exec("shutdown -h now");
 });
 
+/* ===== OSK IPC ===== */
+ipcMain.handle("osk:show", () => oskShow());
+ipcMain.handle("osk:hide", () => oskHide());
+
 app.on("window-all-closed", () => {
+  // beim Beenden sicherheitshalber OSK aus
+  oskHide();
   app.quit();
 });

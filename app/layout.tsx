@@ -1,9 +1,6 @@
-// app/layout.tsx oder app/(app)/layout.tsx
-
 import "./globals.css";
 import TopBar from "./components/TopBar";
 import LeftSidebar from "./components/LeftSidebar";
-import KeyboardProvider from "./components/KeyboardProvider";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -27,11 +24,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <LeftSidebar />
           </div>
 
-          <KeyboardProvider>
-            <main className="col-start-2 row-start-2 overflow-auto p-4 relative z-0">
-              {children}
-            </main>
-          </KeyboardProvider>
+          <main className="col-start-2 row-start-2 overflow-auto p-4 relative z-0">
+            {children}
+          </main>
         </div>
       </body>
     </html>
