@@ -153,7 +153,7 @@ const DEFAULT_CONFIG: AppConfig = {
       enabled: false,
       baseUrl: "https://api.saf-tepasse.de/api:j-HmV1Vn",
       apiKey: "",
-      productsEndpoint: "/printer_products",
+      productsEndpoint: "/printer/printer_products",
       intervalMinutes: 60,
       lastSyncAt: null,
       printerId: "He1NDNzs4nWQC2uS86KC1CXaOxMtx2",
