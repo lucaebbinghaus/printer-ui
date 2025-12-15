@@ -60,7 +60,6 @@ ipcMain.handle("window:toggle-resize", () => {
     mainWindow.setBounds({ width: 1280, height: 800 });
     mainWindow.center();
   } else {
-    mainWindow.setAlwaysOnTop(true);
     mainWindow.setFullScreen(true);
     mainWindow.setKiosk(true);
   }
