@@ -1,16 +1,17 @@
 [Unit]
-Description=Printer UI Electron Kiosk
-After=graphical.target printer-ui.service
-Wants=graphical.target
+Description=Printer UI Backend (Docker Compose)
+After=docker.service network-online.target
+Wants=network-online.target
+Requires=docker.service
 
 [Service]
-Type=simple
-User=@APP_USER@
+Type=oneshot
 WorkingDirectory=/opt/printer-ui
-ExecStart=/opt/printer-ui/electron-app/start.sh
-Restart=always
-RestartSec=2
-Environment=KIOSK_URL=http://localhost:3000
+ExecStart=/usr/bin/docker compose up -d --remove-orphans
+ExecStop=/usr/bin/docker compose down
+RemainAfterExit=yes
+TimeoutStartSec=0
+User=@APP_USER@
 
 [Install]
-WantedBy=graphical.target
+WantedBy=multi-user.target
