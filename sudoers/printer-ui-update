@@ -1,0 +1,5 @@
+# Allow printer-ui to trigger update service without password
+ALL ALL=(root) NOPASSWD:/bin/systemctl start printer-ui-update.service
+ALL ALL=(root) NOPASSWD:/bin/systemctl is-active printer-ui-update.service
+ALL ALL=(root) NOPASSWD:/bin/systemctl show printer-ui-update.service
+ALL ALL=(root) NOPASSWD:/bin/journalctl -u printer-ui-update.service

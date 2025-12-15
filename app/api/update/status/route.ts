@@ -1,57 +1,38 @@
 // app/api/update/status/route.ts
 import { NextResponse } from "next/server";
-import fs from "fs/promises";
-import path from "path";
+import { exec } from "child_process";
 
 export const runtime = "nodejs";
 
-const DATA_DIR = process.env.APP_DATA_DIR || path.join(process.cwd(), "data");
-const LOG_PATH = path.join(DATA_DIR, "update.log");
-const JOB_PATH = path.join(DATA_DIR, "update-job.json");
-
-async function isRunning(pid: number): Promise<boolean> {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function tailLines(text: string, maxLines: number): string {
-  const lines = text.split(/\r?\n/);
-  return lines.slice(Math.max(0, lines.length - maxLines)).join("\n");
+function execText(cmd: string) {
+  return new Promise<string>((resolve, reject) => {
+    exec(cmd, { maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
+      if (err) return reject(new Error(stderr || err.message));
+      resolve(stdout || "");
+    });
+  });
 }
 
 export async function GET() {
   try {
-    let job: any = null;
-    try {
-      job = JSON.parse(await fs.readFile(JOB_PATH, "utf8"));
-    } catch {
-      job = null;
-    }
+    // running?
+    const active = (await execText(
+      "sudo -n /bin/systemctl is-active printer-ui-update.service || true"
+    )).trim();
 
-    let log = "";
-    try {
-      log = await fs.readFile(LOG_PATH, "utf8");
-    } catch {
-      log = "";
-    }
-
-    const pid = job?.pid ? Number(job.pid) : null;
-    const running = pid ? await isRunning(pid) : false;
+    // Logs (letzte 200 Zeilen)
+    const log = await execText(
+      "sudo -n /bin/journalctl -u printer-ui-update.service -n 200 --no-pager || true"
+    );
 
     return NextResponse.json({
       ok: true,
-      running,
-      pid,
-      startedAt: job?.startedAt || null,
-      log: tailLines(log || "", 300),
+      running: active === "active",
+      log,
     });
   } catch (err: any) {
     return NextResponse.json(
-      { ok: false, error: err?.message || "unknown error" },
+      { ok: false, error: err?.message || "status failed" },
       { status: 500 }
     );
   }
