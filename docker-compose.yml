@@ -14,7 +14,7 @@ services:
       - APP_DATA_DIR=/data
 
       # Host-Updater (UI trigger)
-      - UPDATER_BASE_URL=http://host.docker.internal:9123
+      - UPDATER_BASE_URL=http://host.docker.internal:9876
       - UPDATER_TOKEN=ITg2pFuqtibvIovV2Z3oPjJAU6K6EaD2cfjoRa9cId9ZUgSGfezR1rOfe1bvxo0K
 
     extra_hosts:

@@ -1,5 +1,20 @@
+import { NextResponse } from "next/server";
+
+const BASE = process.env.UPDATER_BASE_URL || "http://host.docker.internal:9876";
+const TOKEN = process.env.UPDATER_TOKEN || "";
+
+function buildHeaders(): Record<string, string> {
+  const h: Record<string, string> = {};
+  if (TOKEN) h["Authorization"] = `Bearer ${TOKEN}`;
+  return h;
+}
+
 export async function POST() {
-  const r = await fetch("http://127.0.0.1:9876/update/clear-log", { method: "POST" });
-  const json = await r.json();
-  return Response.json(json, { status: r.status });
+  const r = await fetch(`${BASE}/update/clear-log`, {
+    method: "POST",
+    headers: buildHeaders(),
+  });
+
+  const json = await r.json().catch(() => ({}));
+  return NextResponse.json(json, { status: r.status });
 }
