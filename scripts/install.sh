@@ -79,6 +79,7 @@ sudo rsync -a --delete \
   --exclude '.next' \
   "$PROJECT_DIR/" "$TARGET_DIR/"
 
+# Ownership muss sauber sein (verhindert git "dubious ownership")
 sudo chown -R "$APP_USER:$APP_USER" "$TARGET_DIR"
 
 # -------------------------------
@@ -103,7 +104,7 @@ log "[7/12] npm install"
 cd "$TARGET_DIR"
 sudo -u "$APP_USER" npm install
 
-# chrome-sandbox SUID (optional, hilft bei Sandbox-Problemen)
+# chrome-sandbox SUID (optional)
 if [[ -f "$TARGET_DIR/node_modules/electron/dist/chrome-sandbox" ]]; then
   sudo chown root:root "$TARGET_DIR/node_modules/electron/dist/chrome-sandbox"
   sudo chmod 4755 "$TARGET_DIR/node_modules/electron/dist/chrome-sandbox"
@@ -120,12 +121,15 @@ sudo chmod 0644 /etc/default/printer-ui
 
 APP_USER_ESCAPED="$(printf '%s\n' "$APP_USER" | sed 's/[\/&]/\\&/g')"
 
+# Fallback: mark repo safe for git (covers cases where root executes git)
+sudo git config --global --add safe.directory "$TARGET_DIR" || true
+
 # -------------------------------
 # 9) Legacy cleanup (wichtig)
 # -------------------------------
 log "[9/12] Cleanup legacy units"
 
-# falsche/alte Updater & Update Units
+# alte/legacy Services
 sudo systemctl disable --now printer-ui-updater.service 2>/dev/null || true
 sudo systemctl disable --now printer-ui-update.service  2>/dev/null || true
 sudo systemctl disable --now printer-ui-api.service     2>/dev/null || true
@@ -144,22 +148,46 @@ sudo rm -f /etc/systemd/system/printer-ui-electron.service
 log "[10/12] Install systemd system units"
 
 # Backend (Docker)
+if [[ ! -f "$TARGET_DIR/systemd/system/printer-ui.service.in" ]]; then
+  log "ERROR: Missing $TARGET_DIR/systemd/system/printer-ui.service.in"
+  exit 1
+fi
+
 sed "s/@APP_USER@/$APP_USER_ESCAPED/g" \
   "$TARGET_DIR/systemd/system/printer-ui.service.in" \
   | sudo tee /etc/systemd/system/printer-ui.service >/dev/null
 
-# Host Update API (Node)
+# Host Update API
+if [[ ! -f "$TARGET_DIR/systemd/system/printer-ui-update-api.service" ]]; then
+  log "ERROR: Missing $TARGET_DIR/systemd/system/printer-ui-update-api.service"
+  exit 1
+fi
+
 sudo cp "$TARGET_DIR/systemd/system/printer-ui-update-api.service" \
         /etc/systemd/system/printer-ui-update-api.service
+
+# Ensure update-api runs as APP_USER (so git access matches repo ownership)
+if ! sudo grep -q '^User=' /etc/systemd/system/printer-ui-update-api.service; then
+  sudo perl -0777 -i -pe "s/\[Service\]\n/\[Service\]\nUser=$APP_USER\n/" \
+    /etc/systemd/system/printer-ui-update-api.service
+else
+  sudo sed -i "s/^User=.*/User=$APP_USER/" /etc/systemd/system/printer-ui-update-api.service
+fi
 
 sudo systemctl daemon-reload
 sudo systemctl enable --now printer-ui.service
 sudo systemctl enable --now printer-ui-update-api.service
+sudo systemctl restart printer-ui-update-api.service
 
 # -------------------------------
 # 11) Install systemd USER unit (Electron) + linger
 # -------------------------------
 log "[11/12] Install electron user unit + enable linger"
+
+if [[ ! -f "$TARGET_DIR/systemd/user/printer-ui-electron.service.in" ]]; then
+  log "ERROR: Missing $TARGET_DIR/systemd/user/printer-ui-electron.service.in"
+  exit 1
+fi
 
 USER_UNIT_DIR="/home/$APP_USER/.config/systemd/user"
 sudo mkdir -p "$USER_UNIT_DIR"
@@ -192,4 +220,5 @@ docker compose up -d --remove-orphans
 log "=== INSTALL DONE ==="
 log "Tip: Check services:"
 log "  systemctl status printer-ui.service printer-ui-update-api.service --no-pager"
+log "  curl -sS http://127.0.0.1:9876/update/check && echo"
 log "  journalctl --user -u printer-ui-electron.service -n 50 --no-pager"
