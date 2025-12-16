@@ -1,26 +1,41 @@
+// main.js
 const { app, BrowserWindow, ipcMain } = require("electron");
 const path = require("path");
 const { exec } = require("child_process");
 
 let mainWindow;
-
-/* ===== On-Screen Keyboard (Ubuntu) via onboard ===== */
 let oskVisible = false;
+let oskMode = null; // "numeric" | "text"
 
-function oskShow() {
-  if (oskVisible) return;
+function startOnboard(mode) {
+  // gleiches Layout nicht neu starten
+  if (oskVisible && oskMode === mode) return;
+
   oskVisible = true;
+  oskMode = mode;
 
-  // onboard starten (falls schon läuft, ist es unkritisch)
-  // --xid: normaler Fenstermodus, gut für Kiosk
-  exec("onboard --xid >/dev/null 2>&1 &");
+  // vorheriges Onboard sicher beenden
+  exec("pkill -x onboard >/dev/null 2>&1 || true");
+
+  const layout =
+    mode === "numeric"
+      ? "NumberPad"
+      : "Full Keyboard"; // QWERTZ
+
+  // --dock bottom = unten andocken
+  const cmd = `onboard \
+    --layout "${layout}" \
+    --dock bottom \
+    --xid \
+    >/dev/null 2>&1 &`;
+
+  exec(cmd);
 }
 
-function oskHide() {
+function stopOnboard() {
   if (!oskVisible) return;
   oskVisible = false;
-
-  // onboard beenden
+  oskMode = null;
   exec("pkill -x onboard >/dev/null 2>&1 || true");
 }
 
@@ -46,11 +61,18 @@ function createWindow() {
 
 app.whenReady().then(createWindow);
 
-/* ===== Resize statt Minimize ===== */
+/* ===== IPC ===== */
+
+ipcMain.handle("osk:show", (_, mode) => {
+  startOnboard(mode); // "numeric" | "text"
+});
+
+ipcMain.handle("osk:hide", () => {
+  stopOnboard();
+});
 
 ipcMain.handle("window:toggle-resize", () => {
   if (!mainWindow) return;
-
   const isFs = mainWindow.isFullScreen();
 
   if (isFs) {
@@ -66,20 +88,14 @@ ipcMain.handle("window:toggle-resize", () => {
 });
 
 ipcMain.handle("window:is-fullscreen", () => {
-  if (!mainWindow) return false;
-  return mainWindow.isFullScreen();
+  return mainWindow?.isFullScreen() ?? false;
 });
 
 ipcMain.handle("host:shutdown", () => {
   exec("shutdown -h now");
 });
 
-/* ===== OSK IPC ===== */
-ipcMain.handle("osk:show", () => oskShow());
-ipcMain.handle("osk:hide", () => oskHide());
-
 app.on("window-all-closed", () => {
-  // beim Beenden sicherheitshalber OSK aus
-  oskHide();
+  stopOnboard();
   app.quit();
 });

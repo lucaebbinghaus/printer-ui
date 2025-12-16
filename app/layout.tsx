@@ -3,13 +3,17 @@ import "./globals.css";
 import TopBar from "./components/TopBar";
 import LeftSidebar from "./components/LeftSidebar";
 import SideNavRefreshOnRoute from "./components/SideNavRefreshOnRoute";
+import OskAutoFocus from "./components/OskAutoFocus";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="de">
       <body className="antialiased bg-gray-100 h-screen overflow-hidden">
-        {/* sorgt dafür, dass LeftSidebar (Server) bei Navigation neu rendert */}
+        {/* erzwingt Sidebar-Refresh bei Navigation */}
         <SideNavRefreshOnRoute />
+
+        {/* On-Screen Keyboard Auto-Fokus */}
+        <OskAutoFocus />
 
         <div
           className="

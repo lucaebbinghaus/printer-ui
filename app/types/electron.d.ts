@@ -1,11 +1,15 @@
+// app/types/electron.d.ts
 export {};
 
 declare global {
   interface Window {
     electronAPI?: {
-      toggleResize?: () => Promise<void> | void;
+      oskShow?: (mode: "numeric" | "text") => void | Promise<void>;
+      oskHide?: () => void | Promise<void>;
+
+      toggleResize?: () => void | Promise<void>;
       getFullscreenState?: () => Promise<boolean>;
-      shutdownHost?: () => Promise<void> | void;
+      shutdownHost?: () => void | Promise<void>;
     };
   }
 }
