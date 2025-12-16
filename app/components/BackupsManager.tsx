@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { RefreshCcw, RotateCcw } from "lucide-react";
+import { RefreshCcw, RotateCcw, Trash2 } from "lucide-react";
 
 type BackupInfo = {
   id: string;
@@ -32,6 +32,7 @@ function formatBytes(n: number) {
 export default function BackupsManager() {
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -43,12 +44,17 @@ export default function BackupsManager() {
   async function load() {
     setLoading(true);
     setMsg(null);
-    setErr(null);
 
     try {
-      const res = await fetch("/api/products/backups", { cache: "no-store" });
+      const res = await fetch("/api/backups", { cache: "no-store" });
       const json = await res.json().catch(() => ({}));
-      if (!res.ok || !json?.ok) throw new Error(json?.error || "Failed to load");
+
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error || "Failed to load");
+      }
+
+      // WICHTIG: alten Error-Zustand sicher löschen
+      setErr(null);
 
       setBackups(Array.isArray(json.backups) ? json.backups : []);
       setCurrentFromBackupId(json.currentFromBackupId || null);
@@ -65,7 +71,7 @@ export default function BackupsManager() {
     setErr(null);
 
     try {
-      const res = await fetch("/api/products/backups/restore", {
+      const res = await fetch("/api/backups/restore", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ backupId }),
@@ -85,6 +91,37 @@ export default function BackupsManager() {
     }
   }
 
+  async function deleteBackup(backupId: string) {
+    const ok = window.confirm(
+      `Backup wirklich löschen?\n\n${backupId}\n\nHinweis: Das kann nicht rückgängig gemacht werden.`
+    );
+    if (!ok) return;
+
+    setDeleting(backupId);
+    setMsg(null);
+    setErr(null);
+
+    try {
+      const res = await fetch("/api/backups", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ backupId }),
+      });
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error || json?.message || "Delete failed");
+      }
+
+      setMsg(`Gelöscht: ${backupId}`);
+      await load();
+    } catch (e: any) {
+      setErr(e?.message || "Fehler beim Löschen.");
+    } finally {
+      setDeleting(null);
+    }
+  }
+
   useEffect(() => {
     load();
   }, []);
@@ -95,7 +132,7 @@ export default function BackupsManager() {
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold text-gray-900">
-              Backups wiederherstellen
+              Backups verwalten
             </h2>
           </div>
           <p className="mt-1 text-sm text-gray-600">
@@ -138,7 +175,7 @@ export default function BackupsManager() {
       ) : null}
 
       <div className="mt-2 overflow-hidden rounded-lg border border-gray-200">
-        <div className="grid grid-cols-[1fr_110px_140px] gap-2 bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-700">
+        <div className="grid grid-cols-[1fr_110px_210px] gap-2 bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-700">
           <div>Datei</div>
           <div>Größe</div>
           <div className="text-right">Aktion</div>
@@ -146,16 +183,17 @@ export default function BackupsManager() {
 
         {backups.length === 0 ? (
           <div className="px-3 py-3 text-sm text-gray-600">
-            Noch keine Backups vorhanden.
+            {loading ? "Lade..." : "Noch keine Backups vorhanden."}
           </div>
         ) : (
           backups.map((b) => {
             const isCurrent = currentFromBackupId === b.id;
+            const busy = !!restoring || !!deleting;
 
             return (
               <div
                 key={b.id}
-                className="grid grid-cols-[1fr_110px_140px] gap-2 border-t border-gray-200 px-3 py-2 items-center"
+                className="grid grid-cols-[1fr_110px_210px] gap-2 border-t border-gray-200 px-3 py-2 items-center"
               >
                 <div className="min-w-0">
                   <div className="text-sm font-medium text-gray-900 truncate">
@@ -170,13 +208,13 @@ export default function BackupsManager() {
                   {formatBytes(b.sizeBytes)}
                 </div>
 
-                <div className="text-right">
+                <div className="text-right flex justify-end gap-2">
                   <button
                     onClick={() => restore(b.id)}
-                    disabled={!!restoring || isCurrent}
+                    disabled={busy || isCurrent}
                     className={[
                       "inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium shadow-sm transition",
-                      isCurrent || restoring
+                      isCurrent || busy
                         ? "bg-gray-200 text-gray-500 cursor-not-allowed"
                         : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 active:scale-[0.98]",
                     ].join(" ")}
@@ -189,6 +227,25 @@ export default function BackupsManager() {
                     <RotateCcw className="w-4 h-4" />
                     {restoring === b.id ? "Restore..." : "Restore"}
                   </button>
+
+                  <button
+                    onClick={() => deleteBackup(b.id)}
+                    disabled={busy || isCurrent}
+                    className={[
+                      "inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium shadow-sm transition",
+                      isCurrent || busy
+                        ? "bg-gray-200 text-gray-500 cursor-not-allowed"
+                        : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 active:scale-[0.98]",
+                    ].join(" ")}
+                    title={
+                      isCurrent
+                        ? "Aktives Backup kann nicht gelöscht werden."
+                        : "Backup löschen"
+                    }
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    {deleting === b.id ? "Lösche..." : "Löschen"}
+                  </button>
                 </div>
               </div>
             );
@@ -197,8 +254,8 @@ export default function BackupsManager() {
       </div>
 
       <p className="text-xs text-gray-500">
-        Hinweis: Beim Restore wird kein zusätzliches Backup erstellt. Backups
-        entstehen nur bei Produkt-Sync, wenn sich die Daten ändern.
+        Hinweis: Backups entstehen nur bei Sync, wenn sich die Daten ändern. Beim
+        Restore wird kein zusätzliches Backup erstellt.
       </p>
     </section>
   );

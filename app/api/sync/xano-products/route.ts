@@ -4,8 +4,15 @@ import { NextResponse } from "next/server";
 import crypto from "crypto";
 
 import { getConfig, saveConfig } from "@/app/lib/storage";
-import { createBackupFromCurrentProducts, pruneBackupsKeepLatest } from "@/app/lib/productsBackups";
-import { getProducts, saveProducts, type ProductsFile } from "@/app/lib/storage";
+import {
+  createSnapshotFromCurrentState,
+  pruneSnapshotsKeepLatest,
+} from "@/app/lib/snapshots";
+import {
+  getProducts,
+  saveProducts,
+  type ProductsFile,
+} from "@/app/lib/storage";
 
 export const runtime = "nodejs";
 
@@ -96,21 +103,28 @@ export async function POST() {
 
     // Mehrere mögliche Datenformen unterstützen
     const items: Preset[] =
-      Array.isArray(json) ? json :
-      Array.isArray(json?.items) ? json.items :
-      Array.isArray(json?.data) ? json.data :
-      null;
+      Array.isArray(json)
+        ? json
+        : Array.isArray(json?.items)
+          ? json.items
+          : Array.isArray(json?.data)
+            ? json.data
+            : null;
 
     if (!items) {
       console.error("[sync] Unexpected JSON shape:", json);
-      return new NextResponse("Unexpected Xano response shape.", { status: 500 });
+      return new NextResponse("Unexpected Xano response shape.", {
+        status: 500,
+      });
     }
 
     console.log("[sync] Received items:", items.length);
 
     // ---- Aktuellen Stand aus storage.ts laden (dein products.json Schema) ----
     const currentFile = await getProducts<Preset>([]);
-    const currentItems = Array.isArray(currentFile?.items) ? currentFile.items : [];
+    const currentItems = Array.isArray(currentFile?.items)
+      ? currentFile.items
+      : [];
 
     // ---- Change detection (Hash) ----
     const oldHash = computeHash(currentItems);
@@ -148,9 +162,10 @@ export async function POST() {
       });
     }
 
-    // ---- Backup aktueller Stand (vor Überschreiben) ----
-    const backup = await createBackupFromCurrentProducts();
-    await pruneBackupsKeepLatest(10);
+    // ---- Snapshot-Backup aktueller Stand (vor Überschreiben) ----
+    // (enthält products + komplette config)
+    const backup = await createSnapshotFromCurrentState();
+    await pruneSnapshotsKeepLatest(10);
 
     // ---- Schreiben im storage.ts Format (ProductsFile) ----
     const nextFile: ProductsFile<Preset> = {
@@ -179,7 +194,7 @@ export async function POST() {
         ...config.products,
         currentHash: newHash,
         currentFromBackupId: null, // nach Sync wieder "live"
-        lastBackupId: backup?.id || null,
+        lastBackupId: backup?.id || null, // Feldname bleibt, ist jetzt Snapshot-ID
       },
     });
 

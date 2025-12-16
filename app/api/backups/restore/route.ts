@@ -1,6 +1,5 @@
-// app/api/products/backups/restore/route.ts
 import { NextResponse } from "next/server";
-import { restoreBackupToProducts } from "@/app/lib/productsBackups";
+import { restoreSnapshot } from "@/app/lib/snapshots";
 import { getConfig, saveConfig } from "@/app/lib/storage";
 
 export const runtime = "nodejs";
@@ -17,10 +16,9 @@ export async function POST(req: Request) {
       );
     }
 
-    // Restore überschreibt products.json (KEIN Sicherheits-Backup mehr!)
-    await restoreBackupToProducts(backupId);
+    await restoreSnapshot(backupId);
 
-    // Config markieren, dass aktueller Stand aus einem Backup stammt
+    // Markierung setzen (optional aber sinnvoll für UI)
     const config = await getConfig();
     const nowIso = new Date().toISOString();
 
@@ -35,7 +33,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ ok: true, backupId });
   } catch (e: any) {
-    console.error("[/api/products/backups/restore] FAILED:", e);
+    console.error("[/api/backups/restore] FAILED:", e);
     return NextResponse.json(
       { ok: false, error: e?.message || "Restore failed" },
       { status: 500 }
