@@ -1,0 +1,27 @@
+[Unit]
+Description=Printer UI Electron Kiosk
+After=graphical-session.target printer-ui.service
+Wants=graphical-session.target
+
+[Service]
+Type=simple
+
+# App läuft IM User-Kontext (wichtig für X11/Wayland)
+WorkingDirectory=/opt/printer-ui
+
+# Display aus der Desktop-Session
+Environment=DISPLAY=:0
+
+# Ziel-URL für den Kiosk
+Environment=KIOSK_URL=http://localhost:3000
+
+# Electron starten
+ExecStart=/opt/printer-ui/electron-app/start.sh
+
+# Stabilität
+Restart=always
+RestartSec=2
+TimeoutStartSec=90
+
+[Install]
+WantedBy=default.target
