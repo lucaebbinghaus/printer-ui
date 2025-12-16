@@ -2,40 +2,69 @@
 
 import { useEffect } from "react";
 
+function isTextTarget(el: Element | null): el is HTMLElement {
+  if (!el) return false;
+  const tag = el.tagName;
+  if (tag === "TEXTAREA") return true;
+  if (tag === "INPUT") return true;
+  if ((el as HTMLElement).getAttribute?.("contenteditable") === "true") return true;
+  return false;
+}
+
+function getModeFor(el: HTMLElement): "numeric" | "text" {
+  if (el.tagName === "INPUT") {
+    const t = (el as HTMLInputElement).type;
+    return t === "number" ? "numeric" : "text";
+  }
+  return "text";
+}
+
 export default function OskAutoFocus() {
   useEffect(() => {
-    function onFocusIn(e: FocusEvent) {
-      const el = e.target as HTMLElement;
-      if (!el) return;
+    let hideTimer: any = null;
 
-      if (el.tagName === "INPUT") {
-        const input = el as HTMLInputElement;
-        const type = input.type;
+    function showForActiveElement() {
+      const ae = document.activeElement as HTMLElement | null;
+      if (!ae || !isTextTarget(ae)) return;
+      window.electronAPI?.oskShow?.(getModeFor(ae));
+    }
 
-        if (type === "number") {
-          window.electronAPI?.oskShow?.("numeric");
-        } else {
-          window.electronAPI?.oskShow?.("text");
+    function scheduleHideIfNoInputFocused() {
+      if (hideTimer) clearTimeout(hideTimer);
+      hideTimer = setTimeout(() => {
+        const ae = document.activeElement as HTMLElement | null;
+        // Wenn gerade kein Input/Textarea fokussiert ist, dann schließen
+        if (!ae || !isTextTarget(ae)) {
+          window.electronAPI?.oskHide?.();
         }
-        return;
-      }
+      }, 250);
+    }
 
-      if (el.tagName === "TEXTAREA" || el.getAttribute("contenteditable") === "true") {
-        window.electronAPI?.oskShow?.("text");
+    function onFocusIn(e: FocusEvent) {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+
+      if (isTextTarget(target)) {
+        window.electronAPI?.oskShow?.(getModeFor(target));
+      } else {
+        // Fokus auf etwas anderes -> ggf. schließen (aber delayed)
+        scheduleHideIfNoInputFocused();
       }
     }
 
+    // Wichtig: NICHT sofort bei focusout schließen (sonst klappt Onboard nie)
     function onFocusOut() {
-      // kleine Verzögerung verhindert Flackern
-      setTimeout(() => {
-        window.electronAPI?.oskHide?.();
-      }, 150);
+      scheduleHideIfNoInputFocused();
     }
 
     document.addEventListener("focusin", onFocusIn);
     document.addEventListener("focusout", onFocusOut);
 
+    // Falls beim Laden schon ein Input fokussiert ist
+    setTimeout(showForActiveElement, 0);
+
     return () => {
+      if (hideTimer) clearTimeout(hideTimer);
       document.removeEventListener("focusin", onFocusIn);
       document.removeEventListener("focusout", onFocusOut);
     };
