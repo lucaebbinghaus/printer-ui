@@ -1,0 +1,78 @@
+/* app/components/keyboard/keyboard.css */
+
+.keyboard-overlay {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+
+  background: #101214;
+  padding: 10px;
+  z-index: 9999;
+
+  box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.35);
+}
+
+.kb-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kb-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(56px, 1fr));
+  gap: 8px;
+}
+
+.kb-controls {
+  margin-top: 2px;
+}
+
+.keyboard-overlay .kb-btn {
+  background: #1b1f24;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+
+  border-radius: 10px;
+  padding: 14px 10px;
+  font-size: 16px;
+  font-weight: 600;
+
+  user-select: none;
+  touch-action: manipulation;
+}
+
+.keyboard-overlay .kb-btn:active {
+  transform: scale(0.98);
+}
+
+.keyboard-overlay .kb-btn.kb-wide {
+  grid-column: span 3;
+}
+
+.keyboard-overlay .kb-btn.kb-primary {
+  background: #2b3440;
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.keyboard-overlay .kb-btn.kb-active {
+  outline: 2px solid rgba(255, 255, 255, 0.35);
+}
+
+.keyboard-overlay .kb-btn.kb-wide-space {
+  grid-column: span 6;
+}
+
+.keyboard-overlay .kb-btn.kb-wide-enter {
+  grid-column: span 2;
+}
+
+.keyboard-overlay .kb-btn.kb-wide-shift {
+  grid-column: span 2;
+}
+
+.keyboard-overlay .kb-btn.kb-wide-ok {
+  grid-column: span 2;
+}
+
