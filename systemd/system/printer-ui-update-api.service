@@ -1,16 +1,16 @@
+sudo tee /etc/systemd/system/printer-ui-update-api.service > /dev/null <<'EOF'
 [Unit]
-Description=Printer UI Host Updater API
+Description=Printer UI Host Update API
 After=network.target
 
 [Service]
 Type=simple
 WorkingDirectory=/opt/printer-ui
-Environment=UPDATER_HOST=0.0.0.0
-Environment=UPDATER_PORT=9123
-Environment=UPDATER_TOKEN=ITg2pFuqtibvIovV2Z3oPjJAU6K6EaD2cfjoRa9cId9ZUgSGfezR1rOfe1bvxo0K
-ExecStart=/usr/bin/python3 /opt/printer-ui/scripts/updaterd.py
+Environment=UPDATE_API_PORT=9876
+ExecStart=/usr/bin/node /opt/printer-ui/host-api/server.js
 Restart=always
 RestartSec=2
 
 [Install]
 WantedBy=multi-user.target
+EOF
