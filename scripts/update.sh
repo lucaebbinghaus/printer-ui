@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+MODE="${1:-run}"                 # run | check
 PROJECT_DIR="/opt/printer-ui"
 BRANCH="${UPDATE_BRANCH:-main}"
 DATA_DIR="$PROJECT_DIR/data"
@@ -9,9 +10,68 @@ LOCK_FILE="$DATA_DIR/update.lock"
 log() { echo "[$(date -Is)] $*"; }
 
 mkdir -p "$DATA_DIR"
+cd "$PROJECT_DIR"
 
 # -------------------------------
-# Lock (verhindert Parallel-Updates)
+# CHECK MODE (Host-only): JSON output for UI
+# -------------------------------
+if [[ "$MODE" == "check" ]]; then
+  # Fetch latest remote refs
+  git fetch --all --prune >/dev/null 2>&1 || true
+
+  HEAD="$(git rev-parse HEAD)"
+  REMOTE="$(git rev-parse "origin/$BRANCH")"
+  BEHIND="$(git rev-list --count "HEAD..origin/$BRANCH" || echo "0")"
+  BEHIND="${BEHIND:-0}"
+
+  if [[ "$BEHIND" == "0" ]]; then
+    python3 - <<PY
+import json
+print(json.dumps({
+  "ok": True,
+  "branch": "$BRANCH",
+  "head": "$HEAD",
+  "remote": "$REMOTE",
+  "behind": 0,
+  "commits": [],
+  "files": []
+}))
+PY
+    exit 0
+  fi
+
+  # Commits: tab-separated to avoid fragile parsing; subject may contain quotes
+  COMMITS_RAW="$(git log --date=short --pretty=format:'%H%x09%ad%x09%an%x09%s' "HEAD..origin/$BRANCH" -n 50 || true)"
+  FILES_RAW="$(git diff --name-only "HEAD..origin/$BRANCH" || true)"
+
+  python3 - <<PY
+import json
+commits=[]
+raw = """$COMMITS_RAW""".splitlines()
+for line in raw:
+  parts = line.split("\t", 3)
+  if len(parts) != 4:
+    continue
+  sha, date, author, subject = parts
+  commits.append({"sha": sha, "date": date, "author": author, "subject": subject})
+
+files = [f for f in """$FILES_RAW""".splitlines() if f.strip()]
+
+print(json.dumps({
+  "ok": True,
+  "branch": "$BRANCH",
+  "head": "$HEAD",
+  "remote": "$REMOTE",
+  "behind": int("$BEHIND"),
+  "commits": commits,
+  "files": files
+}))
+PY
+  exit 0
+fi
+
+# -------------------------------
+# RUN MODE: Lock (verhindert Parallel-Updates)
 # -------------------------------
 exec 9>"$LOCK_FILE"
 if ! flock -n 9; then
@@ -19,15 +79,11 @@ if ! flock -n 9; then
   exit 0
 fi
 
-cd "$PROJECT_DIR"
-
 log "=== UPDATE START ==="
 log "Project: $PROJECT_DIR"
 log "Branch:  $BRANCH"
 
-# -------------------------------
 # App-User laden
-# -------------------------------
 APP_USER=""
 if [[ -f /etc/default/printer-ui ]]; then
   # shellcheck disable=SC1091
@@ -37,24 +93,16 @@ APP_USER="${APP_USER:-$(logname 2>/dev/null || whoami)}"
 APP_UID="$(id -u "$APP_USER" 2>/dev/null || echo "")"
 log "App user: $APP_USER (uid=${APP_UID:-?})"
 
-# -------------------------------
-# WICHTIG: Alten Stand VOR Reset merken (Fix für "no-op trotz neuem Commit")
-# -------------------------------
+# WICHTIG: Alten Stand VOR Reset merken
 OLD_HEAD="$(git rev-parse HEAD 2>/dev/null || echo "")"
 if [[ -z "$OLD_HEAD" ]]; then
   log "ERROR: Cannot read current HEAD. Is this a git repo?"
   exit 1
 fi
 
-# -------------------------------
-# 1) Fetch
-# -------------------------------
 log "[1/10] git fetch"
 git fetch --all --prune
 
-# -------------------------------
-# 2) Force clean working tree (Production: lokale Änderungen verwerfen)
-# -------------------------------
 log "[2/10] Force clean working tree (discard local changes)"
 git checkout -B "$BRANCH" "origin/$BRANCH"
 git reset --hard "origin/$BRANCH"
@@ -69,13 +117,9 @@ if [[ "$OLD_HEAD" == "$NEW_HEAD" ]]; then
 fi
 
 CHANGED_FILES="$(git diff --name-only "$OLD_HEAD..$NEW_HEAD" || true)"
-
 log "Changes detected ($OLD_HEAD -> $NEW_HEAD):"
 echo "$CHANGED_FILES" | sed 's/^/ - /'
 
-# -------------------------------
-# 3) Submodules
-# -------------------------------
 log "[3/10] update submodules"
 git submodule sync --recursive
 git submodule update --init --recursive
@@ -85,6 +129,7 @@ NEED_USER_SYSTEMD=0
 NEED_UPDATER_SYSTEMD=0
 NEED_BUILD=0
 NEED_HOST_NPM=0
+NEED_HOST_API_SYSTEMD=0
 
 # systemd (system templates)
 echo "$CHANGED_FILES" | grep -qE '^systemd/(printer-ui\.service\.in|printer-ui-update\.service\.in)$' && NEED_SYSTEMD=1
@@ -92,6 +137,10 @@ echo "$CHANGED_FILES" | grep -qE '^systemd/(printer-ui\.service\.in|printer-ui-u
 echo "$CHANGED_FILES" | grep -qE '^systemd/system/printer-ui-updater\.service$' && NEED_UPDATER_SYSTEMD=1
 # systemd (user)
 echo "$CHANGED_FILES" | grep -qE '^systemd/user/' && NEED_USER_SYSTEMD=1
+
+# host update-api service (Option A)
+echo "$CHANGED_FILES" | grep -qE '^systemd/system/printer-ui-update-api\.service$' && NEED_HOST_API_SYSTEMD=1
+echo "$CHANGED_FILES" | grep -qE '^host-api/' && NEED_HOST_API_SYSTEMD=1
 
 # rebuild container if relevant files changed
 echo "$CHANGED_FILES" | grep -qE '^(Dockerfile|docker-compose\.yml|app/|public/|services/|zplbox/|opcua|package-lock\.json|pnpm-lock\.yaml|yarn\.lock)' && NEED_BUILD=1
@@ -101,9 +150,6 @@ echo "$CHANGED_FILES" | grep -qE '^(package\.json|package-lock\.json|electron-ap
 
 APP_USER_ESCAPED="$(printf '%s\n' "$APP_USER" | sed 's/[\/&]/\\&/g')"
 
-# -------------------------------
-# 4) systemd system units rendern
-# -------------------------------
 if [[ "$NEED_SYSTEMD" == "1" ]]; then
   log "[4/10] Updating systemd system units (render from .in)"
 
@@ -120,9 +166,6 @@ else
   log "[4/10] Systemd system units not changed"
 fi
 
-# -------------------------------
-# 5) host updater unit aktualisieren
-# -------------------------------
 if [[ "$NEED_UPDATER_SYSTEMD" == "1" ]]; then
   log "[5/10] Updating host updater systemd unit"
   sudo cp systemd/system/printer-ui-updater.service /etc/systemd/system/printer-ui-updater.service
@@ -132,9 +175,6 @@ else
   log "[5/10] Host updater systemd not changed"
 fi
 
-# -------------------------------
-# 6) user unit (Electron) aktualisieren
-# -------------------------------
 if [[ "$NEED_USER_SYSTEMD" == "1" ]]; then
   log "[6/10] Updating user systemd unit (Electron)"
   USER_UNIT_DIR="/home/$APP_USER/.config/systemd/user"
@@ -149,9 +189,6 @@ else
   log "[6/10] User systemd not changed"
 fi
 
-# -------------------------------
-# 7) host npm install
-# -------------------------------
 if [[ "$NEED_HOST_NPM" == "1" ]]; then
   log "[7/10] Host npm install (for Electron)"
   cd "$PROJECT_DIR"
@@ -166,9 +203,6 @@ else
   log "[7/10] Host npm install not needed"
 fi
 
-# -------------------------------
-# 8) docker rebuild/up
-# -------------------------------
 if [[ "$NEED_BUILD" == "1" ]]; then
   log "[8/10] docker compose build"
   cd "$PROJECT_DIR"
@@ -180,14 +214,20 @@ else
   log "[8/10] No docker rebuild needed"
 fi
 
-# -------------------------------
-# 9) restarts
-# -------------------------------
 if [[ "$NEED_SYSTEMD" == "1" ]]; then
   log "[9/10] Restart backend service"
   sudo systemctl restart printer-ui.service || true
 else
   log "[9/10] Backend restart not needed"
+fi
+
+# Host Update API systemd (Option A)
+if [[ "$NEED_HOST_API_SYSTEMD" == "1" ]]; then
+  log "[9/10] Update host update-api service"
+  sudo cp systemd/system/printer-ui-update-api.service /etc/systemd/system/printer-ui-update-api.service
+  sudo systemctl daemon-reload
+  sudo systemctl enable printer-ui-update-api.service >/dev/null 2>&1 || true
+  sudo systemctl restart printer-ui-update-api.service || true
 fi
 
 # Electron restart nur wenn User-Bus da ist
