@@ -1,7 +1,7 @@
-sudo tee /etc/systemd/system/printer-ui-update-api.service > /dev/null <<'EOF'
 [Unit]
 Description=Printer UI Host Update API
-After=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
@@ -13,4 +13,3 @@ RestartSec=2
 
 [Install]
 WantedBy=multi-user.target
-EOF
