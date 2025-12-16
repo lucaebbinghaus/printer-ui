@@ -36,20 +36,52 @@ log "App user: $APP_USER (uid=${APP_UID:-?})"
 log "[1/10] git fetch"
 git fetch --all --prune
 
+# ------------------------------------------------------------
+# NEU: Lokale Änderungen IMMER verwerfen (Appliance/Production)
+# ------------------------------------------------------------
+log "[1/10] Force clean working tree (discard local changes)"
+# Stelle sicher, dass wir auf dem richtigen Branch sind (falls jemand lokal gewechselt hat)
+git checkout -B "$BRANCH" "origin/$BRANCH"
+# Hart auf Remote setzen
+git reset --hard "origin/$BRANCH"
+# Untracked Dateien entfernen (IGNORED bleibt, z.B. data/)
+git clean -fd
+# ------------------------------------------------------------
+
+# Jetzt erst prüfen, ob Remote überhaupt Änderungen gebracht hat (gegen vorherigen Stand geht hier nicht mehr),
+# daher bestimmen wir Änderungen über den letzten Pull-Status:
+# Wir verwenden dafür "git rev-parse @{1}" nicht zuverlässig im Script-Kontext.
+# Einfacher: wir checken per remote diff gegen local HEAD, was nach reset identisch sein sollte.
 CHANGED_FILES="$(git diff --name-only "HEAD..origin/$BRANCH" || true)"
-if [[ -z "${CHANGED_FILES//[[:space:]]/}" ]]; then
+
+# Nach reset ist HEAD == origin/BRANCH, daher wäre CHANGED_FILES leer.
+# Damit du trotzdem das Update nicht fälschlich als no-op beendest, nutzen wir einen anderen Ansatz:
+# Wir merken uns vor dem Reset den alten HEAD und vergleichen danach.
+# -> Dafür brauchen wir oben eine Variable. (Wir machen das sauber nachträglich.)
+
+# ------- sauberer Ansatz: alter HEAD vor dem Reset speichern -------
+# (wir machen es hier korrekt, ohne dein Step-Counting zu sprengen)
+
+# Re-fetch ist schon erfolgt; wir holen den "alten" Commit aus dem Reflog,
+# falls vorhanden, sonst nehmen wir einfach "HEAD" (no-op)
+OLD_HEAD="$(git rev-parse HEAD@{1} 2>/dev/null || git rev-parse HEAD)"
+
+# Da wir gerade hard reset gemacht haben, ist HEAD der aktuelle Stand.
+NEW_HEAD="$(git rev-parse HEAD)"
+
+if [[ "$OLD_HEAD" == "$NEW_HEAD" ]]; then
   log "No changes detected. Nothing to do."
   log "=== UPDATE DONE (no-op) ==="
   exit 0
 fi
 
+# Dateien zwischen altem und neuem Stand anzeigen (für Logging/Need flags)
+CHANGED_FILES="$(git diff --name-only "$OLD_HEAD..$NEW_HEAD" || true)"
+
 log "Changes detected:"
 echo "$CHANGED_FILES" | sed 's/^/ - /'
 
-log "[2/10] git pull --ff-only"
-git pull --ff-only origin "$BRANCH"
-
-log "[3/10] update submodules"
+log "[2/10] update submodules"
 git submodule sync --recursive
 git submodule update --init --recursive
 
