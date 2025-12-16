@@ -6,7 +6,8 @@ const fs = require("fs");
 const path = require("path");
 
 const PORT = Number(process.env.UPDATE_API_PORT || 9876);
-const HOST = "127.0.0.1";
+const HOST = process.env.UPDATE_API_HOST || "0.0.0.0";
+
 
 const UPDATE_SCRIPT = "/opt/printer-ui/scripts/update.sh";
 const DATA_DIR = "/opt/printer-ui/data";

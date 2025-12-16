@@ -10,6 +10,7 @@ Environment=UPDATE_API_PORT=9876
 ExecStart=/usr/bin/node /opt/printer-ui/host-api/server.js
 Restart=always
 RestartSec=2
+Environment=UPDATE_API_HOST=0.0.0.0
 
 [Install]
 WantedBy=multi-user.target
