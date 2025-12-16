@@ -129,7 +129,7 @@ fi
 if [[ "$NEED_BUILD" == "1" ]]; then
   log "[8/10] docker compose build"
   cd "$PROJECT_DIR"
-  docker compose build
+  docker compose build --no-cache
 
   log "[8/10] docker compose up -d"
   docker compose up -d --remove-orphans
