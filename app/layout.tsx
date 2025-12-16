@@ -7,6 +7,8 @@ import SideNavRefreshOnRoute from "./components/SideNavRefreshOnRoute";
 import { KeyboardProvider } from "./components/keyboard/KeyboardProvider";
 import KeyboardOverlay from "./components/keyboard/KeyboardOverlay";
 
+import UpdateGuard from "./components/UpdateGuard";
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="de">
@@ -14,6 +16,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <SideNavRefreshOnRoute />
 
         <KeyboardProvider>
+          {/* Globaler Update-Lock (friert die komplette App ein) */}
+          <UpdateGuard />
+
           <div
             className="
               grid h-full
