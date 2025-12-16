@@ -1,11 +1,16 @@
+// app/layout.tsx
 import "./globals.css";
 import TopBar from "./components/TopBar";
 import LeftSidebar from "./components/LeftSidebar";
+import SideNavRefreshOnRoute from "./components/SideNavRefreshOnRoute";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="de">
       <body className="antialiased bg-gray-100 h-screen overflow-hidden">
+        {/* sorgt dafür, dass LeftSidebar (Server) bei Navigation neu rendert */}
+        <SideNavRefreshOnRoute />
+
         <div
           className="
             grid h-full

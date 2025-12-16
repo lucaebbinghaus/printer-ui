@@ -197,8 +197,8 @@ export default function BackupsManager() {
       </div>
 
       <p className="text-xs text-gray-500">
-        Hinweis: Beim Restore wird automatisch ein Sicherheits-Backup des aktuellen
-        Stands erstellt, bevor überschrieben wird.
+        Hinweis: Beim Restore wird kein zusätzliches Backup erstellt. Backups
+        entstehen nur bei Produkt-Sync, wenn sich die Daten ändern.
       </p>
     </section>
   );

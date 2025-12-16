@@ -5,7 +5,10 @@ import crypto from "crypto";
 
 export type Preset = any; // bleibt flexibel; falls du ein Preset-Interface hast, hier ersetzen
 
-const DATA_DIR = path.join(process.cwd(), "data");
+// Wichtig: Daten immer im gemounteten /data Volume speichern (wenn gesetzt)
+const APP_DATA_DIR = process.env.APP_DATA_DIR?.trim();
+const DATA_DIR = APP_DATA_DIR ? APP_DATA_DIR : path.join(process.cwd(), "data");
+
 export const PRODUCTS_FILE = path.join(DATA_DIR, "products.json");
 
 async function ensureDataDir() {
