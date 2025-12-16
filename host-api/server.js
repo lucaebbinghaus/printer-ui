@@ -5,7 +5,7 @@ const { execFile, spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 
-const PORT = process.env.UPDATE_API_PORT ? Number(process.env.UPDATE_API_PORT) : 9876;
+const PORT = Number(process.env.UPDATE_API_PORT || 9876);
 const HOST = "127.0.0.1";
 
 const UPDATE_SCRIPT = "/opt/printer-ui/scripts/update.sh";
@@ -14,9 +14,15 @@ const LOG_FILE = path.join(DATA_DIR, "update.log");
 const PID_FILE = path.join(DATA_DIR, "update.pid");
 const START_FILE = path.join(DATA_DIR, "update.startedAt");
 
+/* ---------------- utilities ---------------- */
+
 function sendJson(res, code, obj) {
   res.writeHead(code, { "Content-Type": "application/json" });
   res.end(JSON.stringify(obj));
+}
+
+function ensureDataDir() {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
 function safeRead(file) {
@@ -28,7 +34,7 @@ function safeRead(file) {
 }
 
 function safeWrite(file, content) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+  ensureDataDir();
   fs.writeFileSync(file, content);
 }
 
@@ -42,20 +48,43 @@ function isPidRunning(pid) {
   }
 }
 
-function runScript(args, cb) {
-  execFile(UPDATE_SCRIPT, args, { timeout: 20000 }, (err, stdout, stderr) => {
-    if (err) return cb(err, stdout, stderr);
-    cb(null, stdout, stderr);
-  });
+/* ---------------- script execution ---------------- */
+
+/**
+ * CHECK MODE
+ * - runs: update.sh check
+ * - MUST return JSON only
+ */
+function runCheck(res) {
+  execFile(
+    UPDATE_SCRIPT,
+    ["check"],
+    { timeout: 15000 },
+    (err, stdout, stderr) => {
+      if (err) {
+        return sendJson(res, 500, {
+          ok: false,
+          error: String(stderr || err.message || err),
+        });
+      }
+
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(stdout.trim());
+    }
+  );
 }
 
+/**
+ * RUN MODE (async)
+ * - runs: update.sh run
+ * - logs redirected to update.log
+ */
 function startUpdateAsync() {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+  ensureDataDir();
 
   const startedAt = new Date().toISOString();
   safeWrite(START_FILE, startedAt + "\n");
 
-  // spawn update script; redirect stdout/stderr to LOG_FILE
   const out = fs.openSync(LOG_FILE, "a");
   const err = fs.openSync(LOG_FILE, "a");
 
@@ -65,87 +94,78 @@ function startUpdateAsync() {
   });
 
   safeWrite(PID_FILE, String(child.pid) + "\n");
-
-  // allow parent to exit independently
   child.unref();
 
   return { pid: child.pid, startedAt };
 }
 
+/* ---------------- HTTP server ---------------- */
+
 const server = http.createServer((req, res) => {
-  // health
+  /* health */
   if (req.method === "GET" && req.url === "/health") {
     return sendJson(res, 200, { ok: true });
   }
 
-  // GET /update/check -> JSON from update.sh check
+  /* GET /update/check */
   if (req.method === "GET" && req.url === "/update/check") {
-    return runScript(["check"], (err, stdout, stderr) => {
-      if (err) {
-        return sendJson(res, 500, { ok: false, error: stderr || err.message || "check failed" });
-      }
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(stdout);
-    });
+    return runCheck(res);
   }
 
-  // GET /update/status -> running + pid + startedAt + log tail
+  /* GET /update/status */
   if (req.method === "GET" && req.url === "/update/status") {
     try {
-      const pidStr = safeRead(PID_FILE).trim();
-      const pid = pidStr ? Number(pidStr) : null;
-
+      const pid = Number(safeRead(PID_FILE).trim()) || null;
       const running = pid ? isPidRunning(pid) : false;
-      const startedAt = safeRead(START_FILE).trim() || null;
-
-      // For simplicity return full log; UI can limit display.
-      // If you want tail only, we can slice it.
-      const log = safeRead(LOG_FILE);
 
       return sendJson(res, 200, {
         ok: true,
         running,
         pid,
-        startedAt,
-        log,
+        startedAt: safeRead(START_FILE).trim() || null,
+        log: safeRead(LOG_FILE),
       });
     } catch (e) {
-      return sendJson(res, 500, { ok: false, error: e.message || "status failed" });
+      return sendJson(res, 500, { ok: false, error: e.message });
     }
   }
 
-  // POST /update/run -> start update (if not already running)
+  /* POST /update/run */
   if (req.method === "POST" && req.url === "/update/run") {
     try {
-      const pidStr = safeRead(PID_FILE).trim();
-      const pid = pidStr ? Number(pidStr) : null;
-
+      const pid = Number(safeRead(PID_FILE).trim()) || null;
       if (pid && isPidRunning(pid)) {
-        const startedAt = safeRead(START_FILE).trim() || null;
-        return sendJson(res, 200, { ok: true, alreadyRunning: true, pid, startedAt });
+        return sendJson(res, 200, {
+          ok: true,
+          alreadyRunning: true,
+          pid,
+          startedAt: safeRead(START_FILE).trim() || null,
+        });
       }
 
-      const started = startUpdateAsync();
-      return sendJson(res, 200, { ok: true, ...started });
+      return sendJson(res, 200, {
+        ok: true,
+        ...startUpdateAsync(),
+      });
     } catch (e) {
-      return sendJson(res, 500, { ok: false, error: e.message || "run failed" });
+      return sendJson(res, 500, { ok: false, error: e.message });
     }
   }
 
-  // POST /update/clear-log -> clears update.log
+  /* POST /update/clear-log */
   if (req.method === "POST" && req.url === "/update/clear-log") {
     try {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
+      ensureDataDir();
       fs.writeFileSync(LOG_FILE, "");
       return sendJson(res, 200, { ok: true });
     } catch (e) {
-      return sendJson(res, 500, { ok: false, error: e.message || "clear-log failed" });
+      return sendJson(res, 500, { ok: false, error: e.message });
     }
   }
 
-  return sendJson(res, 404, { ok: false, error: "not found" });
+  sendJson(res, 404, { ok: false, error: "not found" });
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`printer-ui host update API listening on http://${HOST}:${PORT}`);
+  console.log(`printer-ui update API listening on http://${HOST}:${PORT}`);
 });
