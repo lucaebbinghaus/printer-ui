@@ -10,11 +10,19 @@ function buildHeaders(): HeadersInit {
 }
 
 export async function GET() {
-  const r = await fetch(`${BASE}/update/check`, {
-    cache: "no-store",
-    headers: buildHeaders(),
-  });
+  try {
+    const r = await fetch(`${BASE}/update/check`, {
+      cache: "no-store",
+      headers: buildHeaders(),
+    });
 
-  const json = await r.json().catch(() => ({}));
-  return NextResponse.json(json, { status: r.status });
+    const json = await r.json().catch(() => ({}));
+    return NextResponse.json(json, { status: r.status });
+  } catch (e: any) {
+    console.error("[UPDATE/CHECK] Error connecting to host-api:", e.message);
+    return NextResponse.json(
+      { ok: false, error: "Host update API not available", details: e.message },
+      { status: 503 }
+    );
+  }
 }

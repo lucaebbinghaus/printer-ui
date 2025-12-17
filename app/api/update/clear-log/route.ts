@@ -10,11 +10,19 @@ function buildHeaders(): Record<string, string> {
 }
 
 export async function POST() {
-  const r = await fetch(`${BASE}/update/clear-log`, {
-    method: "POST",
-    headers: buildHeaders(),
-  });
+  try {
+    const r = await fetch(`${BASE}/update/clear-log`, {
+      method: "POST",
+      headers: buildHeaders(),
+    });
 
-  const json = await r.json().catch(() => ({}));
-  return NextResponse.json(json, { status: r.status });
+    const json = await r.json().catch(() => ({}));
+    return NextResponse.json(json, { status: r.status });
+  } catch (e: any) {
+    console.error("[UPDATE/CLEAR-LOG] Error connecting to host-api:", e.message);
+    return NextResponse.json(
+      { ok: false, error: "Host update API not available", details: e.message },
+      { status: 503 }
+    );
+  }
 }

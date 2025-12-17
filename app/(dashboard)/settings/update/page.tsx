@@ -68,37 +68,68 @@ export default function UpdatePage() {
   const progress = useMemo(() => parseProgress(log || ""), [log]);
 
   async function loadStatus() {
-    const res = await fetch("/api/update/status", { cache: "no-store" });
-    const json: UpdateStatus = await res.json().catch(() => ({ ok: false } as any));
-    if (!res.ok || !json?.ok) throw new Error((json as any)?.error || "Status failed");
-
-    const isRunning = !!json.running;
-
-    setRunning(isRunning);
-    setPid((json as any).pid ?? null);
-    setStartedAt((json as any).startedAt ?? null);
-    setLog(String((json as any).log ?? ""));
-
-    // starting -> running bestätigt
-    if (starting && isRunning) setStarting(false);
-
-    // Transition: running -> false
-    if (prevRunningRef.current && !isRunning) {
-      const l = String((json as any).log ?? "");
-      const isSuccess =
-        /UPDATE DONE/i.test(l) &&
-        !/ERROR|FAILED|Exit code|Traceback/i.test(l);
-
-      if (isSuccess) {
-        setMsg("Update erfolgreich abgeschlossen.");
-        setErr(null);
-      } else {
-        setErr("Update beendet, aber offenbar fehlgeschlagen. Bitte Logs prüfen.");
-        setMsg(null);
+    try {
+      const res = await fetch("/api/update/status", { cache: "no-store" });
+      const json: UpdateStatus = await res.json().catch(() => ({ ok: false } as any));
+      
+      // If API is not available (503), don't throw - just return silently
+      // This prevents duplicate error messages when host-api is down
+      if (res.status === 503) {
+        // Only show error if we're not currently running an update
+        // (to avoid showing connection errors during updates)
+        if (!running && !starting) {
+          // Only set error if we don't already have a transition message
+          if (!msg && !err) {
+            setErr("Host update API nicht verfügbar.");
+          }
+        }
+        return;
       }
-    }
 
-    prevRunningRef.current = isRunning;
+      if (!res.ok || !json?.ok) {
+        // Only throw if it's not a connection issue we've already handled
+        throw new Error((json as any)?.error || "Status failed");
+      }
+
+      const isRunning = !!json.running;
+
+      setRunning(isRunning);
+      setPid((json as any).pid ?? null);
+      setStartedAt((json as any).startedAt ?? null);
+      setLog(String((json as any).log ?? ""));
+
+      // starting -> running bestätigt
+      if (starting && isRunning) setStarting(false);
+
+      // Transition: running -> false
+      // Only set message once when transition happens
+      if (prevRunningRef.current && !isRunning) {
+        const l = String((json as any).log ?? "");
+        const isSuccess =
+          /UPDATE DONE/i.test(l) &&
+          !/ERROR|FAILED|Exit code|Traceback/i.test(l);
+
+        // Clear any previous messages before setting new one
+        setMsg(null);
+        setErr(null);
+
+        if (isSuccess) {
+          setMsg("Update erfolgreich abgeschlossen.");
+        } else {
+          setErr("Update beendet, aber offenbar fehlgeschlagen. Bitte Logs prüfen.");
+        }
+      }
+
+      prevRunningRef.current = isRunning;
+    } catch (e: any) {
+      // Only show error if we're not in the middle of an update transition
+      // and don't already have a message set
+      if (!prevRunningRef.current && !msg && !err) {
+        setErr(e?.message || "Status konnte nicht geladen werden.");
+      }
+      // Re-throw to let caller handle if needed
+      throw e;
+    }
   }
 
   async function loadCheck() {
@@ -106,11 +137,25 @@ export default function UpdatePage() {
     try {
       const res = await fetch("/api/update/check", { cache: "no-store" });
       const json: CheckResponse = await res.json().catch(() => ({ ok: false } as any));
+      
+      // If API is not available, don't show error (connection issues are handled elsewhere)
+      if (res.status === 503) {
+        setCheck(null);
+        return;
+      }
+
       if (!res.ok || !json?.ok) throw new Error(json?.error || "Update-Check fehlgeschlagen");
       setCheck(json);
+      // Clear any previous check-related errors on success
+      if (err && err.includes("Update-Check")) {
+        setErr(null);
+      }
     } catch (e: any) {
       setCheck(null);
-      setErr(e?.message || "Update-Check fehlgeschlagen.");
+      // Only set error if we don't already have a more important message
+      if (!msg && (!err || err.includes("Update-Check"))) {
+        setErr(e?.message || "Update-Check fehlgeschlagen.");
+      }
     } finally {
       setChecking(false);
     }
@@ -123,18 +168,26 @@ export default function UpdatePage() {
       try {
         await loadStatus();
       } catch (e: any) {
-        setErr(e?.message || "Status konnte nicht geladen werden.");
+        // Error handling is now done inside loadStatus
+        // Only set error here if loadStatus didn't handle it
+        if (!msg && !err) {
+          setErr(e?.message || "Status konnte nicht geladen werden.");
+        }
       }
 
       // Beim Öffnen der Seite direkt checken (wenn nicht gerade busy)
       try {
         await loadCheck();
-      } catch {}
+      } catch {
+        // Errors are handled inside loadCheck
+      }
 
       t = setInterval(async () => {
         try {
           await loadStatus();
-        } catch {}
+        } catch {
+          // Errors are handled inside loadStatus
+        }
       }, 1500);
     })();
 
@@ -361,12 +414,12 @@ export default function UpdatePage() {
           </div>
         </div>
 
+        {/* Show only one message at a time - success takes priority */}
         {msg ? (
           <div className="p-3 bg-green-50 border border-green-200 text-green-800 rounded-lg text-sm">
             {msg}
           </div>
-        ) : null}
-        {err ? (
+        ) : err ? (
           <div className="p-3 bg-red-50 border border-red-200 text-red-800 rounded-lg text-sm">
             {err}
           </div>

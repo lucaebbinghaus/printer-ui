@@ -5,7 +5,9 @@ import {
   OPCUAClient,
   MessageSecurityMode,
   SecurityPolicy,
-} from "node-opcua-client";
+  Variant,
+  DataType,
+} from "node-opcua";
 
 export const runtime = "nodejs";
 
@@ -66,12 +68,16 @@ export async function POST() {
         console.log("[CANCEL] calling TriggerInput with LBLFEED to clear print unit...");
 
         // Call TriggerInput method with LBLFEED argument via Interpreter object
-        // The input argument should be a string "LBLFEED"
-        // Many OPC UA libraries auto-convert simple types, so passing the string directly should work
+        // The input argument should be a string "LBLFEED" wrapped in a Variant
         const feedResult = await session.call({
           objectId: INTERPRETER_OBJECT_NODEID,
           methodId: TRIGGER_INPUT_METHOD_NODEID,
-          inputArguments: ["LBLFEED"],
+          inputArguments: [
+            new Variant({
+              dataType: DataType.String,
+              value: "LBLFEED",
+            }),
+          ],
         });
 
         console.log("[CANCEL] TriggerInput call result:", feedResult.statusCode.toString());
