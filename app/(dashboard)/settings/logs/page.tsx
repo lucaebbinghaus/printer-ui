@@ -93,6 +93,14 @@ export default function LogsPage() {
   }
 
   function getStatusBadge(status: string, health?: string) {
+    if (status === "unavailable") {
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full bg-gray-50 border border-gray-200 px-2 py-0.5 text-gray-800 text-xs">
+          <AlertCircle className="w-3 h-3" />
+          Nicht verfügbar
+        </span>
+      );
+    }
     if (status === "running") {
       if (health === "healthy") {
         return (
@@ -222,6 +230,31 @@ export default function LogsPage() {
       {error && (
         <div className="p-3 bg-red-50 border border-red-200 text-red-800 rounded-lg text-sm">
           {error}
+        </div>
+      )}
+
+      {/* Docker Socket Warning */}
+      {services.some((s) => s.status === "unavailable") && (
+        <div className="p-4 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
+            <div className="space-y-2 text-sm">
+              <div className="font-semibold">Docker-Zugriff nicht verfügbar</div>
+              <p>
+                Um Docker-Logs anzuzeigen, muss der Docker Socket in der{" "}
+                <code className="bg-amber-100 px-1 py-0.5 rounded text-xs">docker-compose.yml</code>{" "}
+                gemountet werden:
+              </p>
+              <pre className="bg-amber-100 p-2 rounded text-xs overflow-x-auto">
+{`volumes:
+  - printer-ui-data:/data
+  - /var/run/docker.sock:/var/run/docker.sock`}
+              </pre>
+              <p className="text-xs text-amber-700">
+                Nach dem Hinzufügen muss der Container neu gestartet werden.
+              </p>
+            </div>
+          </div>
         </div>
       )}
 
