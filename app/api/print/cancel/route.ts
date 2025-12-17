@@ -1,12 +1,12 @@
 // app/api/printer/cancel/route.ts
 import { NextResponse } from "next/server";
+import net from "net";
 import { getConfig } from "@/app/lib/storage";
+import { buildLabelHtml } from "@/app/lib/buildLabelHtml";
 import {
   OPCUAClient,
   MessageSecurityMode,
   SecurityPolicy,
-  Variant,
-  DataType,
 } from "node-opcua";
 
 export const runtime = "nodejs";
@@ -15,9 +15,57 @@ export const runtime = "nodejs";
 // In UAExpert: Rechtsklick auf "Interpreter" → Attributes → NodeId kopieren.
 const INTERPRETER_OBJECT_NODEID = "ns=3;i=10005"; // TODO: anpassen
 const TOTAL_CANCEL_METHOD_NODEID = "ns=3;i=6007";
-// HIER bitte die NodeId der "TriggerInput"-Methode unter Interpreter eintragen.
-// In UAExpert: Rechtsklick auf "TriggerInput" unter Interpreter → Attributes → NodeId kopieren.
-const TRIGGER_INPUT_METHOD_NODEID = "ns=3;i=6005"; // TODO: anpassen
+
+function injectQuantity(zpl: string, quantity: number): string {
+  if (quantity <= 1) return zpl;
+
+  const idx = zpl.indexOf("^XA");
+  if (idx === -1) {
+    return zpl;
+  }
+
+  const insertPos = idx + 3;
+  const pqCommand = `^PQ${quantity}\n`;
+
+  return zpl.slice(0, insertPos) + pqCommand + zpl.slice(insertPos);
+}
+
+async function sendZplToPrinter({
+  host,
+  port,
+  zpl,
+  copies,
+}: {
+  host: string;
+  port: number;
+  zpl: string;
+  copies: number;
+}): Promise<void> {
+  const copiesSafe = Math.max(1, Number(copies) || 1);
+  const zplWithQuantity = injectQuantity(zpl, copiesSafe);
+
+  console.log(
+    `[CANCEL] sending empty label to printer ${host}:${port} with copies=${copiesSafe}`
+  );
+
+  return new Promise<void>((resolve, reject) => {
+    const socket = net.createConnection({ host, port }, () => {
+      socket.write(zplWithQuantity, "ascii", () => {
+        socket.end();
+      });
+    });
+
+    socket.on("error", (err: Error) => {
+      console.error("[CANCEL] TCP error:", err);
+      reject(err);
+    });
+
+    socket.on("end", () => {
+      console.log("[CANCEL] TCP connection closed by printer");
+      resolve();
+    });
+  });
+}
 
 export async function POST() {
   try {
@@ -62,42 +110,60 @@ export async function POST() {
 
     const ok = result.statusCode.name === "Good";
 
-    // After canceling, trigger a label feed to clear the print unit
+    await session.close();
+    await client.disconnect();
+
+    // After canceling, print an empty label to clear the print unit
     if (ok) {
       try {
-        console.log("[CANCEL] calling TriggerInput with LBLFEED to clear print unit...");
-
-        // Call TriggerInput method with LBLFEED argument via Interpreter object
-        // The input argument should be a string "LBLFEED" wrapped in a Variant
-        const feedResult = await session.call({
-          objectId: INTERPRETER_OBJECT_NODEID,
-          methodId: TRIGGER_INPUT_METHOD_NODEID,
-          inputArguments: [
-            new Variant({
-              dataType: DataType.String,
-              value: "LBLFEED",
-            }),
-          ],
+        console.log("[CANCEL] printing empty label to clear print unit...");
+        
+        const emptyLabelHtml = buildLabelHtml({
+          name: "",
+          artNumber: "",
+          weight: "",
+          mhd: "",
+          ingredientsHtml: "",
+          barcodeData: "",
+          description: "",
         });
 
-        console.log("[CANCEL] TriggerInput call result:", feedResult.statusCode.toString());
+        const dataBase64 = Buffer.from(emptyLabelHtml, "utf8").toString("base64");
 
-        if (feedResult.statusCode.name !== "Good") {
-          console.warn(
-            "[CANCEL] TriggerInput failed, but cancel was successful:",
-            feedResult.statusCode.toString()
-          );
+        const zplboxUrl = process.env.ZPLBOX_URL ?? "http://zplbox:8080";
+        const zplboxEndpoint = `${zplboxUrl}/v1/html2zpl`;
+
+        const renderRes = await fetch(zplboxEndpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            widthPts: 685,
+            heightPts: 1010,
+            orientation: "Rotate0",
+            dataBase64,
+          }),
+        });
+
+        if (renderRes.ok) {
+          const zplCode = await renderRes.text();
+          const printerPort = 9100;
+
+          await sendZplToPrinter({
+            host: printerIp,
+            port: printerPort,
+            zpl: zplCode,
+            copies: 1,
+          });
+
+          console.log("[CANCEL] empty label printed successfully");
         } else {
-          console.log("[CANCEL] empty label feed triggered successfully");
+          console.warn("[CANCEL] failed to render empty label, but cancel was successful");
         }
       } catch (clearError: any) {
         // Log error but don't fail the cancel operation
-        console.error("[CANCEL] error triggering label feed:", clearError);
+        console.error("[CANCEL] error printing empty label:", clearError);
       }
     }
-
-    await session.close();
-    await client.disconnect();
 
     return NextResponse.json({
       ok,
