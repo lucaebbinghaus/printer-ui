@@ -6,6 +6,7 @@ import {
   MessageSecurityMode,
   SecurityPolicy,
 } from "node-opcua";
+import { logInfo, logError, logApiError } from "@/app/lib/logger";
 
 export const runtime = "nodejs";
 
@@ -34,7 +35,7 @@ export async function POST() {
     }
 
     const endpointUrl = `opc.tcp://${printerIp}:4840/`;
-    console.log("[CANCEL] connecting to", endpointUrl);
+    logInfo(`Connecting to OPC UA endpoint: ${endpointUrl}`, "CANCEL");
 
     const client = OPCUAClient.create({
       securityMode: MessageSecurityMode.None,
@@ -45,7 +46,10 @@ export async function POST() {
     await client.connect(endpointUrl);
     const session = await client.createSession();
 
-    console.log("[CANCEL] calling TotalCancel ...");
+    logInfo("Calling TotalCancel method", "CANCEL", {
+      objectId: INTERPRETER_OBJECT_NODEID,
+      methodId: TOTAL_CANCEL_METHOD_NODEID,
+    });
 
     const result = await session.call({
       objectId: INTERPRETER_OBJECT_NODEID,
@@ -53,7 +57,10 @@ export async function POST() {
       inputArguments: [],
     });
 
-    console.log("[CANCEL] call result:", result.statusCode.toString());
+    logInfo(`TotalCancel result: ${result.statusCode.toString()}`, "CANCEL", {
+      statusCode: result.statusCode.toString(),
+      statusName: result.statusCode.name,
+    });
 
     const ok = result.statusCode.name === "Good";
 
@@ -65,7 +72,7 @@ export async function POST() {
       statusCode: result.statusCode.toString(),
     });
   } catch (e: any) {
-    console.error("[CANCEL] error:", e);
+    logApiError("/api/print/cancel", "POST", e);
     return NextResponse.json(
       { ok: false, error: e?.message || String(e) },
       { status: 500 }

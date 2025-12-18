@@ -96,6 +96,12 @@ export async function getSideNav(): Promise<{
         href: "/settings/update",
         icon: "DownloadCloud",
       },
+      {
+        key: "logs",
+        label: "Logs",
+        href: "/settings/logs",
+        icon: "FileText",
+      },
     ],
   };
 }

@@ -108,13 +108,37 @@ export default function UpdatePage() {
         const isSuccess =
           /UPDATE DONE/i.test(l) &&
           !/ERROR|FAILED|Exit code|Traceback/i.test(l);
+        
+        // Check if container was restarted (docker compose up)
+        const containerRestarted = /docker compose up/i.test(l) || /Restart backend service/i.test(l);
 
         // Clear any previous messages before setting new one
         setMsg(null);
         setErr(null);
 
         if (isSuccess) {
-          setMsg("Update erfolgreich abgeschlossen.");
+          // Build success message with commit info if available
+          let successMsg = "Update erfolgreich abgeschlossen.";
+          
+          if (containerRestarted) {
+            successMsg = "Update erfolgreich installiert. Container wurde neu gestartet.";
+            
+            // Add commit information if available
+            if (check && check.commits && check.commits.length > 0) {
+              const commitCount = Math.min(check.commits.length, 5);
+              const commitList = check.commits.slice(0, commitCount).map(c => 
+                `• ${c.subject} (${c.sha.slice(0, 8)})`
+              ).join("\n");
+              
+              if (check.commits.length > commitCount) {
+                successMsg += `\n\n${check.commits.length} Commits installiert:\n${commitList}\n... (${check.commits.length - commitCount} weitere)`;
+              } else {
+                successMsg += `\n\n${check.commits.length} Commit(s) installiert:\n${commitList}`;
+              }
+            }
+          }
+          
+          setMsg(successMsg);
         } else {
           setErr("Update beendet, aber offenbar fehlgeschlagen. Bitte Logs prüfen.");
         }
@@ -416,7 +440,7 @@ export default function UpdatePage() {
 
         {/* Show only one message at a time - success takes priority */}
         {msg ? (
-          <div className="p-3 bg-green-50 border border-green-200 text-green-800 rounded-lg text-sm">
+          <div className="p-3 bg-green-50 border border-green-200 text-green-800 rounded-lg text-sm whitespace-pre-wrap">
             {msg}
           </div>
         ) : err ? (

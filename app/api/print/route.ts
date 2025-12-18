@@ -52,8 +52,8 @@ async function sendZplToPrinter({
       });
     });
 
-    socket.on("error", (err) => {
-      console.error("[PRINT] TCP error:", err);
+    socket.on("error", (err: Error) => {
+      logError("TCP connection error", err, "PRINT", { host, port });
       reject(err);
     });
 
@@ -64,13 +64,20 @@ async function sendZplToPrinter({
   });
 }
 
+import { logInfo, logError, logApiError, sanitizeData } from "@/app/lib/logger";
+
 export async function POST(req: Request) {
   const t0 = Date.now();
-  console.log("---- PRINT API CALLED ----", new Date().toISOString());
+  logInfo("Print API called", "PRINT");
 
+  let body: any = null;
   try {
-    const body = await req.json();
-    console.log("[PRINT] REQUEST BODY:", body);
+    body = await req.json();
+    logInfo("Print request received", "PRINT", {
+      hasProduct: !!body.product,
+      hasName: !!body.name,
+      qty: body.qty,
+    });
 
     let {
       html = "",
@@ -134,7 +141,11 @@ export async function POST(req: Request) {
     const artNumberStr = String(art_number ?? "").trim();
 
     if (!artNumberStr || !name) {
-      console.warn("[PRINT] Missing fields (art_number, name)");
+      logError("Missing required fields", undefined, "PRINT", {
+        hasArtNumber: !!artNumberStr,
+        hasName: !!name,
+        body: sanitizeData(body),
+      });
       return new NextResponse("Missing fields (art_number, name)", {
         status: 400,
       });
@@ -203,10 +214,10 @@ export async function POST(req: Request) {
       copies: finalQty,
     });
 
-    console.log(
-      "---- PRINT SUCCESS (render+TCP) ---- total:",
-      Date.now() - t0,
-      "ms"
+    logInfo(
+      `Print successful (${finalQty}x copies)`,
+      "PRINT",
+      { durationMs: Date.now() - t0, copies: finalQty }
     );
 
     return NextResponse.json({
@@ -215,11 +226,12 @@ export async function POST(req: Request) {
       durationMs: Date.now() - t0,
     });
   } catch (e: any) {
-    console.error(
-      "---- PRINT ERROR (render+TCP) ---- after",
-      Date.now() - t0,
-      "ms",
-      e
+    logApiError("/api/print", "POST", e, body);
+    logError(
+      `Print failed after ${Date.now() - t0}ms`,
+      e,
+      "PRINT",
+      { durationMs: Date.now() - t0 }
     );
     return new NextResponse(e?.message ?? "Unknown error", { status: 500 });
   }
