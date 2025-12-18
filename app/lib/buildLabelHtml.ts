@@ -191,6 +191,17 @@ export function buildLabelHtml(opts: {
     width: 250px;
     height: 90px;
   }
+
+  .rotated-footer-barcode svg {
+    display: block;
+  }
+
+  /* Barcode text styling */
+  .rotated-footer-barcode text {
+    font-family: "Open Sans", Arial, sans-serif;
+    font-size: 16px;
+    font-weight: normal;
+  }
   </style>
 
   <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
@@ -254,7 +265,9 @@ export function buildLabelHtml(opts: {
       JsBarcode("#barcode-rotated", gs1Data, {
         format: "CODE128",
         ean128: true,
-        displayValue: false,
+        displayValue: true,
+        fontSize: 16,
+        textMargin: 4,
         width: 3,
         height: 90,
         margin: 0
