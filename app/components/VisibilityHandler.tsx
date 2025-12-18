@@ -14,14 +14,33 @@ export default function VisibilityHandler() {
   const router = useRouter();
 
   useEffect(() => {
+    let refreshTimeoutId: ReturnType<typeof setTimeout> | null = null;
+    let lastHiddenAt: number | null = null;
+    const MIN_HIDDEN_TIME = 5 * 60 * 1000; // 5 Minuten
+    
     const handleVisibilityChange = () => {
-      // Wenn die Seite wieder sichtbar wird, refreshe die Route
-      // um sicherzustellen, dass alle Komponenten wieder funktionieren
-      if (!document.hidden) {
-        // Kleine Verzögerung, damit der Browser Zeit hat, die Verbindungen wiederherzustellen
-        setTimeout(() => {
-          router.refresh();
-        }, 500);
+      if (document.hidden) {
+        // Seite wurde versteckt - Zeitstempel speichern
+        lastHiddenAt = Date.now();
+      } else if (lastHiddenAt !== null) {
+        // Seite wurde wieder sichtbar - prüfe ob lange genug versteckt war
+        const hiddenDuration = Date.now() - lastHiddenAt;
+        
+        // Nur refreshen wenn die Seite länger als MIN_HIDDEN_TIME versteckt war
+        if (hiddenDuration >= MIN_HIDDEN_TIME) {
+          // Cleanup previous timeout
+          if (refreshTimeoutId) {
+            clearTimeout(refreshTimeoutId);
+            refreshTimeoutId = null;
+          }
+          
+          // Kleine Verzögerung, damit der Browser Zeit hat, die Verbindungen wiederherzustellen
+          refreshTimeoutId = setTimeout(() => {
+            router.refresh();
+          }, 1000);
+        }
+        
+        lastHiddenAt = null;
       }
     };
 
@@ -32,6 +51,10 @@ export default function VisibilityHandler() {
     window.addEventListener("focus", handleVisibilityChange);
 
     return () => {
+      if (refreshTimeoutId) {
+        clearTimeout(refreshTimeoutId);
+        refreshTimeoutId = null;
+      }
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("focus", handleVisibilityChange);
     };

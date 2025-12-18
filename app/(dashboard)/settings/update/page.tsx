@@ -186,7 +186,7 @@ export default function UpdatePage() {
   }
 
   useEffect(() => {
-    let t: any;
+    let statusIntervalId: ReturnType<typeof setInterval> | null = null;
 
     (async () => {
       try {
@@ -206,7 +206,7 @@ export default function UpdatePage() {
         // Errors are handled inside loadCheck
       }
 
-      t = setInterval(async () => {
+      statusIntervalId = setInterval(async () => {
         try {
           await loadStatus();
         } catch {
@@ -215,7 +215,12 @@ export default function UpdatePage() {
       }, 1500);
     })();
 
-    return () => clearInterval(t);
+    return () => {
+      if (statusIntervalId) {
+        clearInterval(statusIntervalId);
+        statusIntervalId = null;
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

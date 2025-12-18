@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
 import { NAV_ITEMS } from "./nav";
@@ -51,6 +51,9 @@ export default function TopBar() {
 
   // Portal mount flag
   const [mounted, setMounted] = useState(false);
+  
+  // Ref für Timeout-Cleanup
+  const cancelTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const electronAPI =
     typeof window !== "undefined" ? (window as any).electronAPI : null;
@@ -122,20 +125,37 @@ export default function TopBar() {
   async function handleCancelJobs() {
     if (cancelling) return;
 
+    // Cleanup previous timeout if any
+    if (cancelTimeoutRef.current) {
+      clearTimeout(cancelTimeoutRef.current);
+      cancelTimeoutRef.current = null;
+    }
+
     setCancelling(true);
+    
     try {
       const res = await fetch("/api/print/cancel", { method: "POST" });
       if (!res.ok) throw new Error();
 
       setTempMessage("Alle Druckjobs wurden abgebrochen.");
-      setTimeout(() => setTempMessage(null), 4000);
+      cancelTimeoutRef.current = setTimeout(() => setTempMessage(null), 4000);
     } catch {
       setTempMessage("Fehler beim Abbrechen der Jobs.");
-      setTimeout(() => setTempMessage(null), 4000);
+      cancelTimeoutRef.current = setTimeout(() => setTempMessage(null), 4000);
     } finally {
       setCancelling(false);
     }
   }
+  
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (cancelTimeoutRef.current) {
+        clearTimeout(cancelTimeoutRef.current);
+        cancelTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   /* -------- Status Text -------- */
 

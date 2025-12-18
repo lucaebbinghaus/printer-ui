@@ -62,7 +62,7 @@ const statusEmitter = new EventEmitter();
 let lastUpdateAt: number | null = null;
 // Health-Check-Timer nur einmal starten
 let healthTimerStarted = false;
-let healthTimerId: NodeJS.Timeout | null = null;
+let healthTimerId: ReturnType<typeof setInterval> | null = null;
 
 // ------------------------------------------------------------------
 function emitStatus() {

@@ -31,7 +31,7 @@ export default function UpdateGuard() {
   const progress = useMemo(() => parseProgress(log), [log]);
 
   useEffect(() => {
-    let t: any;
+    let statusIntervalId: ReturnType<typeof setInterval> | null = null;
 
     async function tick() {
       try {
@@ -49,8 +49,14 @@ export default function UpdateGuard() {
     }
 
     tick();
-    t = setInterval(tick, 1200);
-    return () => clearInterval(t);
+    statusIntervalId = setInterval(tick, 1200);
+    
+    return () => {
+      if (statusIntervalId) {
+        clearInterval(statusIntervalId);
+        statusIntervalId = null;
+      }
+    };
   }, []);
 
   if (!running) return null;

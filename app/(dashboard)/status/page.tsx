@@ -96,51 +96,99 @@ export default function StatusPage() {
     setLoading(true);
     setSseError(null);
 
-    let es: EventSource | null = new EventSource(
-      "/api/status/printer/stream"
-    );
-    let reconnectTimeoutId: NodeJS.Timeout | null = null;
+    let es: EventSource | null = null;
+    let reconnectTimeoutId: ReturnType<typeof setTimeout> | null = null;
     let isMounted = true;
+    let reconnectAttempts = 0;
+    const MAX_RECONNECT_ATTEMPTS = 10;
+    const INITIAL_RECONNECT_DELAY = 3000;
+    const MAX_RECONNECT_DELAY = 30000;
 
-    const handleMessage = (ev: MessageEvent) => {
+    function connect() {
       if (!isMounted) return;
+      
       try {
-        const json: PrinterStatus = JSON.parse(ev.data);
-        setData(json);
-        setLoading(false);
-        setSseError(null);
+        es = new EventSource("/api/status/printer/stream");
+        reconnectAttempts = 0; // Reset on successful connection
 
-        const overall = json.connected
-          ? deriveOverallStatus(json.nodes || [])
-          : ("error" as LampStatus);
+        const handleMessage = (ev: MessageEvent) => {
+          if (!isMounted || !es) return;
+          try {
+            const json: PrinterStatus = JSON.parse(ev.data);
+            setData(json);
+            setLoading(false);
+            setSseError(null);
 
-        setOverallStatus(overall);
-      } catch (e) {
-        console.error("Status SSE parse error", e);
-      }
-    };
+            const overall = json.connected
+              ? deriveOverallStatus(json.nodes || [])
+              : ("error" as LampStatus);
 
-    const handleError = (ev: Event) => {
-      if (!isMounted) return;
-      console.error("Status SSE error", ev);
-      setSseError("Verbindung zum Status-Stream unterbrochen.");
-      setOverallStatus("error");
-      es?.close();
-      es = null;
+            setOverallStatus(overall);
+          } catch (e) {
+            console.error("Status SSE parse error", e);
+          }
+        };
 
-      // Auto-Reconnect (nur wenn noch mounted)
-      if (isMounted) {
-        reconnectTimeoutId = setTimeout(() => {
+        const handleError = (ev: Event) => {
+          if (!isMounted || !es) return;
+          
+          // EventSource sends error event when connection is closed
+          // Check if it's actually closed
+          if (es.readyState === EventSource.CLOSED) {
+            console.error("Status SSE connection closed");
+            es.close();
+            es = null;
+
+            // Only reconnect if we haven't exceeded max attempts
+            if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS && isMounted) {
+              reconnectAttempts++;
+              
+              // Exponential backoff with max delay
+              const delay = Math.min(
+                INITIAL_RECONNECT_DELAY * Math.pow(2, reconnectAttempts - 1),
+                MAX_RECONNECT_DELAY
+              );
+              
+              setSseError(
+                reconnectAttempts === 1
+                  ? "Verbindung zum Status-Stream unterbrochen. Versuche erneut..."
+                  : `Verbindung unterbrochen. Versuch ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}...`
+              );
+              setOverallStatus("error");
+
+              reconnectTimeoutId = setTimeout(() => {
+                if (isMounted) {
+                  connect();
+                }
+              }, delay);
+            } else if (isMounted) {
+              // Max attempts reached
+              setSseError("Verbindung zum Status-Stream konnte nicht wiederhergestellt werden. Bitte Seite neu laden.");
+              setOverallStatus("error");
+            }
+          }
+        };
+
+        const handleOpen = () => {
           if (!isMounted) return;
-          es = new EventSource("/api/status/printer/stream");
-          es.onmessage = handleMessage;
-          es.onerror = handleError;
-        }, 3000);
-      }
-    };
+          setSseError(null);
+          setLoading(false);
+        };
 
-    es.onmessage = handleMessage;
-    es.onerror = handleError;
+        es.onmessage = handleMessage;
+        es.onerror = handleError;
+        es.onopen = handleOpen;
+      } catch (e) {
+        console.error("Failed to create EventSource:", e);
+        if (isMounted) {
+          setSseError("Fehler beim Verbinden zum Status-Stream.");
+          setOverallStatus("error");
+        }
+      }
+    }
+
+    // Initial connection
+    connect();
 
     return () => {
       isMounted = false;
@@ -148,8 +196,10 @@ export default function StatusPage() {
         clearTimeout(reconnectTimeoutId);
         reconnectTimeoutId = null;
       }
-      es?.close();
-      es = null;
+      if (es) {
+        es.close();
+        es = null;
+      }
     };
   }, []);
 

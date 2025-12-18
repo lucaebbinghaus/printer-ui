@@ -54,6 +54,8 @@ export default function SettingsPage() {
   const [pressMs, setPressMs] = useState(0);
   const timerRef = useRef<number | null>(null);
   const tickRef = useRef<number | null>(null);
+  const successTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const errorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     // Last sync timestamp laden
@@ -67,6 +69,8 @@ export default function SettingsPage() {
     return () => {
       if (timerRef.current) window.clearTimeout(timerRef.current);
       if (tickRef.current) window.clearInterval(tickRef.current);
+      if (successTimeoutRef.current) clearTimeout(successTimeoutRef.current);
+      if (errorTimeoutRef.current) clearTimeout(errorTimeoutRef.current);
     };
   }, []);
 
@@ -167,10 +171,14 @@ export default function SettingsPage() {
       setError(e?.message || "Produkte abrufen fehlgeschlagen.");
     } finally {
       setFetchingProducts(false);
-      setTimeout(() => {
-        setError(null);
-        setSuccess(null);
-      }, 5000);
+      
+      // Cleanup previous timeouts
+      if (successTimeoutRef.current) clearTimeout(successTimeoutRef.current);
+      if (errorTimeoutRef.current) clearTimeout(errorTimeoutRef.current);
+      
+      // Set new timeouts
+      successTimeoutRef.current = setTimeout(() => setSuccess(null), 5000);
+      errorTimeoutRef.current = setTimeout(() => setError(null), 5000);
     }
   }
 
@@ -182,8 +190,11 @@ export default function SettingsPage() {
     // Sidebar im selben Tab informieren
     window.dispatchEvent(new Event("settings-unlock-changed"));
 
+    // Cleanup previous timeout
+    if (successTimeoutRef.current) clearTimeout(successTimeoutRef.current);
+    
     setSuccess("Erweiterte Einstellungen freigeschaltet (15 Minuten).");
-    setTimeout(() => setSuccess(null), 5000);
+    successTimeoutRef.current = setTimeout(() => setSuccess(null), 5000);
   }
 
   function startPress() {
