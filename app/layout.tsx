@@ -8,12 +8,14 @@ import { KeyboardProvider } from "./components/keyboard/KeyboardProvider";
 import KeyboardOverlay from "./components/keyboard/KeyboardOverlay";
 
 import UpdateGuard from "./components/UpdateGuard";
+import VisibilityHandler from "./components/VisibilityHandler";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="de">
       <body className="antialiased bg-gray-100 h-screen overflow-hidden">
         <SideNavRefreshOnRoute />
+        <VisibilityHandler />
 
         <KeyboardProvider>
           {/* Globaler Update-Lock (friert die komplette App ein) */}

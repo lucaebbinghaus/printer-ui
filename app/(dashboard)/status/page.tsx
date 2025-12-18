@@ -99,8 +99,11 @@ export default function StatusPage() {
     let es: EventSource | null = new EventSource(
       "/api/status/printer/stream"
     );
+    let reconnectTimeoutId: NodeJS.Timeout | null = null;
+    let isMounted = true;
 
     const handleMessage = (ev: MessageEvent) => {
+      if (!isMounted) return;
       try {
         const json: PrinterStatus = JSON.parse(ev.data);
         setData(json);
@@ -118,23 +121,35 @@ export default function StatusPage() {
     };
 
     const handleError = (ev: Event) => {
+      if (!isMounted) return;
       console.error("Status SSE error", ev);
       setSseError("Verbindung zum Status-Stream unterbrochen.");
       setOverallStatus("error");
       es?.close();
-      // Optional: einfacher Auto-Reconnect
-      setTimeout(() => {
-        es = new EventSource("/api/status/printer/stream");
-        es.onmessage = handleMessage;
-        es.onerror = handleError;
-      }, 3000);
+      es = null;
+
+      // Auto-Reconnect (nur wenn noch mounted)
+      if (isMounted) {
+        reconnectTimeoutId = setTimeout(() => {
+          if (!isMounted) return;
+          es = new EventSource("/api/status/printer/stream");
+          es.onmessage = handleMessage;
+          es.onerror = handleError;
+        }, 3000);
+      }
     };
 
     es.onmessage = handleMessage;
     es.onerror = handleError;
 
     return () => {
+      isMounted = false;
+      if (reconnectTimeoutId) {
+        clearTimeout(reconnectTimeoutId);
+        reconnectTimeoutId = null;
+      }
       es?.close();
+      es = null;
     };
   }, []);
 

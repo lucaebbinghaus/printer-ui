@@ -58,10 +58,11 @@ let lastStatus: PrinterStatus = {
 
 const statusEmitter = new EventEmitter();
 
-// Zeitstempel des letzten „Lebenszeichens“ vom Drucker
+// Zeitstempel des letzten „Lebenszeichens" vom Drucker
 let lastUpdateAt: number | null = null;
 // Health-Check-Timer nur einmal starten
 let healthTimerStarted = false;
+let healthTimerId: NodeJS.Timeout | null = null;
 
 // ------------------------------------------------------------------
 function emitStatus() {
@@ -119,12 +120,18 @@ function updateNode(name: string, val: any) {
   }
 }
 
-// Health-Check: wenn länger kein Update → „nicht verbunden“
+// Health-Check: wenn länger kein Update → „nicht verbunden"
 function startHealthTimer(timeoutMs = 10_000, intervalMs = 3_000) {
   if (healthTimerStarted) return;
   healthTimerStarted = true;
 
-  setInterval(() => {
+  // Cleanup existing timer if any
+  if (healthTimerId) {
+    clearInterval(healthTimerId);
+    healthTimerId = null;
+  }
+
+  healthTimerId = setInterval(() => {
     // wenn wir eh schon als disconnected markiert sind, nichts tun
     if (!lastStatus.connected) return;
 
@@ -138,6 +145,15 @@ function startHealthTimer(timeoutMs = 10_000, intervalMs = 3_000) {
       markDisconnected("OPC-UA Timeout – Drucker vermutlich nicht erreichbar");
     }
   }, intervalMs);
+}
+
+// Cleanup function for health timer
+function stopHealthTimer() {
+  if (healthTimerId) {
+    clearInterval(healthTimerId);
+    healthTimerId = null;
+  }
+  healthTimerStarted = false;
 }
 
 // ------------------------------------------------------------------
