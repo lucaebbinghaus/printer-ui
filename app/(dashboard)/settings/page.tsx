@@ -37,7 +37,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const [defaultLabelQty, setDefaultLabelQty] = useState<number>(1);
+  const [defaultLabelQty, setDefaultLabelQty] = useState<number | string>(1);
   const [startPresetId, setStartPresetId] = useState<string | "">("");
 
   const [presets, setPresets] = useState<PresetSummary[]>([]);
@@ -321,9 +321,26 @@ export default function SettingsPage() {
             min={1}
             max={9999}
             value={defaultLabelQty}
-            onChange={(e) =>
-              setDefaultLabelQty(Math.max(1, Number(e.target.value) || 1))
-            }
+            onChange={(e) => {
+              const value = e.target.value;
+              // Allow empty string or any number during editing
+              if (value === "") {
+                setDefaultLabelQty("");
+              } else {
+                const num = Number(value);
+                if (!isNaN(num)) {
+                  setDefaultLabelQty(num);
+                }
+              }
+            }}
+            onBlur={(e) => {
+              // When leaving the field, set to 1 if empty or less than 1
+              const value = e.target.value;
+              const num = Number(value);
+              if (value === "" || isNaN(num) || num < 1) {
+                setDefaultLabelQty(1);
+              }
+            }}
             className="w-32 border border-gray-200 px-3 py-2 rounded-lg text-sm"
           />
           <p className="mt-1 text-xs text-gray-500">

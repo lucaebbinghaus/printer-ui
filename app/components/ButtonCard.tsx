@@ -20,6 +20,7 @@ export type PrinterProduct = {
   art_number: string;
   mhd: number;
   description?: string;
+  color_hex?: string;
   _addon_printer_product_diet_type?: {
     name: string;
     svg: string;
@@ -41,23 +42,31 @@ export default function ButtonCard({
   isPrinting = false,
   isSending = false,
 }: ButtonCardProps) {
-  const createdDate = new Date(item.created_at).toLocaleDateString("de-DE");
+  // Calculate MHD date from days (mhd is number of days from now)
+  const mhdDays = Number(item.mhd ?? 0);
+  const mhdDate = new Date(Date.now() + mhdDays * 86400000);
+  // Format date without leading zeros (e.g., "1.12.2025" instead of "01.12.2025")
+  const day = mhdDate.getDate();
+  const month = mhdDate.getMonth() + 1;
+  const year = mhdDate.getFullYear();
+  const mhdDateString = `${day}.${month}.${year}`;
 
+  // Get border color from color_hex, fallback to gray-200
+  const borderColor = item.color_hex || "#e5e7eb";
+  
   const baseClasses = `
     flex
-    group relative h-44 w-full rounded-xl border bg-white
+    group relative h-44 w-full rounded-xl bg-white
     p-4 text-left shadow-sm
     focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/10
     active:scale-[0.985] transition
   `;
 
   const enabledStyles = `
-    border-gray-200
-    hover:border-gray-300 hover:shadow-md
+    hover:shadow-md
   `;
 
   const disabledStyles = `
-    border-gray-200
     opacity-60 cursor-not-allowed
   `;
 
@@ -71,6 +80,11 @@ export default function ButtonCard({
         baseClasses,
         isBlocked ? disabledStyles : enabledStyles,
       ].join(" ")}
+      style={{
+        borderWidth: "2px",
+        borderStyle: "solid",
+        borderColor: borderColor,
+      }}
     >
       {/* Produktname */}
       <div className="text-sm font-semibold text-gray-900 line-clamp-2">
@@ -85,7 +99,7 @@ export default function ButtonCard({
 
         <div className="text-right leading-tight">
           <div className="text-xs font-semibold text-gray-900">
-            {createdDate}
+            {mhdDateString}
           </div>
 
           {item.art_number && (

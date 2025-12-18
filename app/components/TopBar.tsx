@@ -47,6 +47,7 @@ export default function TopBar() {
   const [cancelling, setCancelling] = useState(false);
   const [tempMessage, setTempMessage] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(true);
+  const [settingsUnlocked, setSettingsUnlocked] = useState(false);
 
   // Portal mount flag
   const [mounted, setMounted] = useState(false);
@@ -57,8 +58,39 @@ export default function TopBar() {
   const isLabelsPage =
     pathname === "/labels" || pathname.startsWith("/labels/");
 
+  // Check if settings are unlocked
+  function isUnlockedNow() {
+    if (typeof window === "undefined") return false;
+    const raw = localStorage.getItem("settingsUnlockUntil");
+    if (!raw) return false;
+    const until = Number(raw);
+    return until > Date.now();
+  }
+
   useEffect(() => {
     setMounted(true);
+    setSettingsUnlocked(isUnlockedNow());
+  }, []);
+
+  // Listen for settings unlock changes
+  useEffect(() => {
+    const update = () => setSettingsUnlocked(isUnlockedNow());
+    
+    // Check on storage events
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === "settingsUnlockUntil") update();
+    };
+    
+    // Check on custom events
+    const onCustom = () => update();
+    
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("settings-unlock-changed", onCustom as any);
+    
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("settings-unlock-changed", onCustom as any);
+    };
   }, []);
 
   /* -------- initial Fullscreen-Status -------- */
@@ -188,18 +220,20 @@ export default function TopBar() {
               <RotateCcw className="h-4 w-4" />
             </button>
 
-            {/* Resize */}
-            <button
-              aria-label="Fenstergröße umschalten"
-              onClick={handleToggleResize}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 shadow-sm hover:bg-gray-50 active:scale-[0.98]"
-            >
-              {isFullscreen ? (
-                <Minimize2 className="h-4 w-4" />
-              ) : (
-                <Maximize2 className="h-4 w-4" />
-              )}
-            </button>
+            {/* Resize - nur anzeigen wenn Einstellungen freigeschaltet */}
+            {settingsUnlocked && (
+              <button
+                aria-label="Fenstergröße umschalten"
+                onClick={handleToggleResize}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 shadow-sm hover:bg-gray-50 active:scale-[0.98]"
+              >
+                {isFullscreen ? (
+                  <Minimize2 className="h-4 w-4" />
+                ) : (
+                  <Maximize2 className="h-4 w-4" />
+                )}
+              </button>
+            )}
 
             {/* Shutdown */}
             <button

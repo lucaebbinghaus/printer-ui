@@ -1,5 +1,33 @@
 // app/lib/buildLabelHtml.ts
 
+// Format date without leading zeros (e.g., "1.12.2025" instead of "01.12.2025")
+function formatDateWithoutLeadingZeros(dateString: string): string {
+  if (!dateString) return dateString;
+  
+  try {
+    // Try to parse the date string (could be "01.12.2025" or already formatted)
+    const parts = dateString.split(".");
+    if (parts.length === 3) {
+      const day = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10);
+      const year = parts[2];
+      // Remove leading zeros by converting to number and back to string
+      return `${day}.${month}.${year}`;
+    }
+    // If it's not in DD.MM.YYYY format, try to parse as Date
+    const date = new Date(dateString);
+    if (!isNaN(date.getTime())) {
+      const day = date.getDate();
+      const month = date.getMonth() + 1;
+      const year = date.getFullYear();
+      return `${day}.${month}.${year}`;
+    }
+  } catch {
+    // If parsing fails, return original string
+  }
+  return dateString;
+}
+
 export function buildLabelHtml(opts: {
   name: string;
   artNumber: string;         // aktuell unbenutzt im Layout, aber noch im Typ
@@ -20,6 +48,9 @@ export function buildLabelHtml(opts: {
     description,
     dietTypeSvg,
   } = opts;
+  
+  // Format MHD date without leading zeros
+  const formattedMhd = formatDateWithoutLeadingZeros(mhd);
 
   const barcodeJsLiteral = JSON.stringify(barcodeData);
 
@@ -202,7 +233,7 @@ export function buildLabelHtml(opts: {
       <div class="footer-meta">
         Mindestens haltbar bei 7°C - 9°C bis:
         <div style="font-size: 30px; font-weight: bold;">
-          ${mhd}
+          ${formattedMhd}
         </div>
         verzehrfertig • <strong>${weight}</strong>
       </div>
