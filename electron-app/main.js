@@ -4,6 +4,17 @@ const { exec } = require("child_process");
 
 let mainWindow;
 
+// Wayland compatibility fixes
+if (process.env.XDG_SESSION_TYPE === "wayland") {
+  // Disable GPU acceleration on Wayland to prevent crashes
+  app.disableHardwareAcceleration();
+  // Use XWayland if available
+  process.env.ELECTRON_DISABLE_SANDBOX = "1";
+}
+
+// Prevent Electron from being garbage collected
+app.allowRendererProcessReuse = false;
+
 
 
 function createWindow() {
@@ -20,10 +31,17 @@ function createWindow() {
       preload: path.join(__dirname, "preload.js"),
       nodeIntegration: false,
       contextIsolation: true,
+      // Disable background throttling to prevent resource cleanup issues
+      backgroundThrottling: false,
     },
   });
 
   mainWindow.loadURL("http://localhost:3000");
+
+  // Prevent window from being garbage collected
+  mainWindow.on("closed", () => {
+    mainWindow = null;
+  });
 }
 
 app.whenReady().then(createWindow);
@@ -58,5 +76,28 @@ ipcMain.handle("host:shutdown", () => {
 
 app.on("window-all-closed", () => {
   // beim Beenden sicherheitshalber OSK aus
+  if (mainWindow) {
+    mainWindow.destroy();
+    mainWindow = null;
+  }
   app.quit();
+});
+
+// Cleanup on app quit
+app.on("before-quit", () => {
+  if (mainWindow) {
+    mainWindow.destroy();
+    mainWindow = null;
+  }
+});
+
+// Handle uncaught exceptions
+process.on("uncaughtException", (error) => {
+  console.error("Uncaught Exception:", error);
+  // Don't crash the app, just log it
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("Unhandled Rejection at:", promise, "reason:", reason);
+  // Don't crash the app, just log it
 });

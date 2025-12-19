@@ -4,6 +4,21 @@
 import { useEffect, useState } from "react";
 import type { LampStatus, PrinterNode } from "./opcuaWatcher";
 
+// Helper to log to server-side logger
+async function logToServer(level: "info" | "warn" | "error", message: string, context?: string, data?: any) {
+  try {
+    await fetch("/api/logs/client", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ level, message, context, data }),
+    }).catch(() => {
+      // Ignore errors - logging should not break the app
+    });
+  } catch {
+    // Ignore errors
+  }
+}
+
 export type PrinterStatusResponse = {
   connected: boolean;
   endpoint: string | null;
@@ -58,11 +73,15 @@ export function usePrinterStatus() {
 
     let es: EventSource | null = null;
     let reconnectTimeoutId: ReturnType<typeof setTimeout> | null = null;
+    let heartbeatIntervalId: ReturnType<typeof setInterval> | null = null;
     let isMounted = true;
     let reconnectAttempts = 0;
+    let lastMessageTime = Date.now();
     const MAX_RECONNECT_ATTEMPTS = 10;
     const INITIAL_RECONNECT_DELAY = 3000;
     const MAX_RECONNECT_DELAY = 30000;
+    const HEARTBEAT_INTERVAL = 30000; // Check every 30 seconds
+    const HEARTBEAT_TIMEOUT = 60000; // Consider disconnected if no message for 1 minute
 
     function connect() {
       if (!isMounted) return;
@@ -73,8 +92,16 @@ export function usePrinterStatus() {
 
         const handleMessage = (ev: MessageEvent) => {
           if (!isMounted || !es) return;
+          
+          // Ignore keep-alive comments
+          if (ev.data.trim().startsWith(":")) {
+            lastMessageTime = Date.now();
+            return;
+          }
+          
           try {
             const json: PrinterStatusResponse = JSON.parse(ev.data);
+            lastMessageTime = Date.now();
             setData(json);
             setLoading(false);
             setSseError(null);
@@ -95,7 +122,13 @@ export function usePrinterStatus() {
           // EventSource sends error event when connection is closed
           // Check if it's actually closed
           if (es.readyState === EventSource.CLOSED) {
+            const timeSinceLastMessage = Date.now() - lastMessageTime;
             console.error("Status SSE connection closed");
+            logToServer("warn", "SSE connection closed", "PRINTER_STATUS", {
+              readyState: es.readyState,
+              reconnectAttempt: reconnectAttempts + 1,
+              timeSinceLastMessage: `${Math.round(timeSinceLastMessage / 1000)}s`,
+            });
             es.close();
             es = null;
 
@@ -123,6 +156,10 @@ export function usePrinterStatus() {
               }, delay);
             } else if (isMounted) {
               // Max attempts reached
+              logToServer("error", "SSE max reconnect attempts reached", "PRINTER_STATUS", {
+                maxAttempts: MAX_RECONNECT_ATTEMPTS,
+                lastMessageTime: lastMessageTime ? new Date(lastMessageTime).toISOString() : null,
+              });
               setSseError("Verbindung zum Status-Stream konnte nicht wiederhergestellt werden. Bitte Seite neu laden.");
               setOverallStatus("error");
             }
@@ -131,8 +168,54 @@ export function usePrinterStatus() {
 
         const handleOpen = () => {
           if (!isMounted) return;
+          lastMessageTime = Date.now();
           setSseError(null);
           setLoading(false);
+          
+          logToServer("info", "SSE connection opened", "PRINTER_STATUS", {
+            reconnectAttempt: reconnectAttempts,
+          });
+          
+          // Start heartbeat checker
+          if (heartbeatIntervalId) {
+            clearInterval(heartbeatIntervalId);
+            heartbeatIntervalId = null;
+          }
+          
+          heartbeatIntervalId = setInterval(() => {
+            if (!isMounted || !es) {
+              if (heartbeatIntervalId) {
+                clearInterval(heartbeatIntervalId);
+                heartbeatIntervalId = null;
+              }
+              return;
+            }
+            
+            // Check if we haven't received a message in too long
+            const timeSinceLastMessage = Date.now() - lastMessageTime;
+            if (timeSinceLastMessage > HEARTBEAT_TIMEOUT) {
+              const timeSinceLastMessageSeconds = Math.round(timeSinceLastMessage / 1000);
+              console.warn(`[usePrinterStatus] No message for ${timeSinceLastMessage}ms, reconnecting...`);
+              logToServer("warn", "SSE heartbeat timeout - no messages received", "PRINTER_STATUS", {
+                timeSinceLastMessage: `${timeSinceLastMessageSeconds}s`,
+                timeout: `${HEARTBEAT_TIMEOUT / 1000}s`,
+                readyState: es?.readyState,
+                reconnectAttempt: reconnectAttempts + 1,
+              });
+              if (es) {
+                es.close();
+                es = null;
+              }
+              if (heartbeatIntervalId) {
+                clearInterval(heartbeatIntervalId);
+                heartbeatIntervalId = null;
+              }
+              // Trigger reconnect
+              if (isMounted) {
+                connect();
+              }
+            }
+          }, 30000); // Check every 30 seconds
         };
 
         es.onmessage = handleMessage;
@@ -140,6 +223,10 @@ export function usePrinterStatus() {
         es.onopen = handleOpen;
       } catch (e) {
         console.error("Failed to create EventSource:", e);
+        logToServer("error", "Failed to create EventSource", "PRINTER_STATUS", {
+          error: e instanceof Error ? e.message : String(e),
+          reconnectAttempt: reconnectAttempts + 1,
+        });
         if (isMounted) {
           setSseError("Fehler beim Verbinden zum Status-Stream.");
           setOverallStatus("error");
@@ -155,6 +242,10 @@ export function usePrinterStatus() {
       if (reconnectTimeoutId) {
         clearTimeout(reconnectTimeoutId);
         reconnectTimeoutId = null;
+      }
+      if (heartbeatIntervalId) {
+        clearInterval(heartbeatIntervalId);
+        heartbeatIntervalId = null;
       }
       if (es) {
         es.close();

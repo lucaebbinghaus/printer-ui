@@ -9,6 +9,7 @@ import {
   SecurityPolicy,
 } from "node-opcua";
 import { EventEmitter } from "events";
+import { logInfo, logWarn, logError } from "./logger";
 
 export type LampStatus = "ok" | "warning" | "error" | "unknown";
 
@@ -139,9 +140,16 @@ function startHealthTimer(timeoutMs = 10_000, intervalMs = 3_000) {
 
     const diff = Date.now() - lastUpdateAt;
     if (diff > timeoutMs) {
+      const diffSeconds = Math.round(diff / 1000);
       console.warn(
         `[OPC-UA Watcher] Timeout (${diff}ms) – keine Antwort vom Drucker`
       );
+      logWarn("OPC UA health check timeout", "OPCUA", {
+        timeoutMs,
+        timeSinceLastUpdate: `${diffSeconds}s`,
+        lastUpdateAt: lastUpdateAt ? new Date(lastUpdateAt).toISOString() : null,
+        endpoint: lastStatus.endpoint,
+      });
       markDisconnected("OPC-UA Timeout – Drucker vermutlich nicht erreichbar");
     }
   }, intervalMs);
@@ -201,6 +209,10 @@ export async function startOpcUaWatcher(endpoint: string) {
     // optional: Events vom Client nutzen (falls die in deinem Setup feuern)
     client.on("close", () => {
       console.warn("[OPC-UA Watcher] client connection closed");
+      logWarn("OPC UA client connection closed", "OPCUA", {
+        endpoint,
+        lastUpdateAt: lastUpdateAt ? new Date(lastUpdateAt).toISOString() : null,
+      });
       markDisconnected("OPC-UA Verbindung geschlossen");
     });
 
@@ -208,6 +220,11 @@ export async function startOpcUaWatcher(endpoint: string) {
       console.warn(
         `[OPC-UA Watcher] backoff – Versuch ${retry}, nächste in ${delay}ms`
       );
+      logWarn("OPC UA connection backoff", "OPCUA", {
+        retry,
+        delayMs: delay,
+        endpoint,
+      });
       // markDisconnect, aber Health-Checker fängt das sowieso ab
       markDisconnected(`Reconnecting (Versuch ${retry})…`);
     });
@@ -215,6 +232,7 @@ export async function startOpcUaWatcher(endpoint: string) {
     await client.connect(endpoint);
     session = await client.createSession();
     console.log("[OPC-UA Watcher] session established");
+    logInfo("OPC UA session established", "OPCUA", { endpoint });
 
     lastStatus.endpoint = endpoint;
 
@@ -238,10 +256,12 @@ export async function startOpcUaWatcher(endpoint: string) {
     markAlive();
 
     // 2) Subscription für Realtime-Updates
+    // Lifetime erhöht für längere Verbindungsstabilität (120 * 250ms = 30s war zu kurz)
+    // Neue Werte: 14400 * 250ms = 3600s = 1 Stunde Lifetime
     subscription = ClientSubscription.create(session, {
       requestedPublishingInterval: 250,
-      requestedLifetimeCount: 120,
-      requestedMaxKeepAliveCount: 20,
+      requestedLifetimeCount: 14400, // 1 Stunde (14400 * 250ms = 3600000ms)
+      requestedMaxKeepAliveCount: 20, // Keep-Alive alle 20 * 250ms = 5s
       maxNotificationsPerPublish: 20,
       publishingEnabled: true,
       priority: 10,
@@ -258,6 +278,11 @@ export async function startOpcUaWatcher(endpoint: string) {
 
     subscription.on("terminated", () => {
       console.log("[OPC-UA Watcher] subscription terminated");
+      logWarn("OPC UA subscription terminated", "OPCUA", {
+        endpoint,
+        lastUpdateAt: lastUpdateAt ? new Date(lastUpdateAt).toISOString() : null,
+        lifetimeCount: 14400,
+      });
       markDisconnected("Subscription beendet");
     });
 
@@ -287,6 +312,11 @@ export async function startOpcUaWatcher(endpoint: string) {
     }
   } catch (e: any) {
     console.error("[OPC-UA Watcher] ERROR:", e);
+    logError("OPC UA watcher error", e, "OPCUA", {
+      endpoint,
+      errorMessage: e?.message || String(e),
+      errorCode: e?.code,
+    });
     markDisconnected(e?.message || String(e));
   }
 }
@@ -307,4 +337,47 @@ export function subscribeToStatus(
   return () => {
     statusEmitter.off("update", listener);
   };
+}
+
+// ------------------------------------------------------------------
+// Cleanup function for graceful shutdown
+// ------------------------------------------------------------------
+export async function cleanupOpcUaWatcher() {
+  logInfo("Cleaning up OPC UA watcher", "OPCUA");
+  
+  // Stop health timer
+  stopHealthTimer();
+  
+  // Close subscription
+  if (subscription) {
+    try {
+      await subscription.terminate();
+      subscription = null;
+    } catch (e: any) {
+      logWarn("Error terminating subscription", "OPCUA", { error: e?.message || String(e) });
+    }
+  }
+  
+  // Close session
+  if (session) {
+    try {
+      await session.close();
+      session = null;
+    } catch (e: any) {
+      logWarn("Error closing session", "OPCUA", { error: e?.message || String(e) });
+    }
+  }
+  
+  // Disconnect client
+  if (client) {
+    try {
+      await client.disconnect();
+      client = null;
+    } catch (e: any) {
+      logWarn("Error disconnecting client", "OPCUA", { error: e?.message || String(e) });
+    }
+  }
+  
+  watcherStarted = false;
+  logInfo("OPC UA watcher cleanup completed", "OPCUA");
 }

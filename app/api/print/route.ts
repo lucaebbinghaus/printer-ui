@@ -41,30 +41,51 @@ async function sendZplToPrinter({
   const copiesSafe = Math.max(1, Number(copies) || 1);
   const zplWithQuantity = injectQuantity(zpl, copiesSafe);
 
-  console.log(
-    `[PRINT] sending to printer ${host}:${port} with copies=${copiesSafe}`
+  logInfo(
+    `Sending ZPL to printer ${host}:${port} with copies=${copiesSafe}`,
+    "PRINT"
   );
 
   return new Promise<void>((resolve, reject) => {
     const socket = net.createConnection({ host, port }, () => {
       socket.write(zplWithQuantity, "ascii", () => {
-        socket.end();
+        // Give socket time to send data before closing
+        setTimeout(() => {
+          socket.end();
+        }, 100);
       });
     });
 
+    // Timeout to prevent hanging connections
+    const timeout = setTimeout(() => {
+      logWarn("TCP connection timeout", undefined, "PRINT");
+      socket.destroy();
+      reject(new Error("Connection timeout"));
+    }, 10000); // 10 seconds timeout
+
     socket.on("error", (err: Error) => {
+      clearTimeout(timeout);
       logError("TCP connection error", err, "PRINT", { host, port });
+      socket.destroy();
       reject(err);
     });
 
     socket.on("end", () => {
-      console.log("[PRINT] TCP connection closed by printer");
+      clearTimeout(timeout);
+      logInfo("TCP connection closed by printer", "PRINT", { host, port });
+      // Ensure socket is fully closed
+      socket.destroy();
       resolve();
+    });
+
+    socket.on("close", () => {
+      clearTimeout(timeout);
+      // Socket is fully closed
     });
   });
 }
 
-import { logInfo, logError, logApiError, sanitizeData } from "@/app/lib/logger";
+import { logInfo, logWarn, logError, logApiError, sanitizeData } from "@/app/lib/logger";
 
 export async function POST(req: Request) {
   const t0 = Date.now();

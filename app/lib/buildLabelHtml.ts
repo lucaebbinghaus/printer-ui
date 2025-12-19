@@ -190,17 +190,23 @@ export function buildLabelHtml(opts: {
   .rotated-footer-barcode {
     width: 250px;
     height: 90px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
   }
 
   .rotated-footer-barcode svg {
     display: block;
   }
 
-  /* Barcode text styling */
+  /* Barcode text styling - über dem Barcode, um 180 Grad gedreht */
   .rotated-footer-barcode text {
     font-family: "Open Sans", Arial, sans-serif;
     font-size: 16px;
     font-weight: normal;
+    transform: rotate(180deg);
+    transform-origin: center;
   }
   </style>
 
@@ -267,11 +273,33 @@ export function buildLabelHtml(opts: {
         ean128: true,
         displayValue: true,
         fontSize: 16,
-        textMargin: 4,
+        textPosition: "bottom",
+        textMargin: 8,
         width: 3,
-        height: 90,
+        height: 70,
         margin: 0
       });
+
+      // Text um 180 Grad drehen und nach unten verschieben (da Footer bereits gedreht ist)
+      setTimeout(() => {
+        const textElement = document.querySelector("#barcode-rotated text");
+        if (textElement) {
+          const svg = document.querySelector("#barcode-rotated svg");
+          if (svg) {
+            const svgWidth = svg.getAttribute("width") || "250";
+            const svgHeight = svg.getAttribute("height") || "90";
+            const textX = parseFloat(svgWidth) / 2;
+            const textY = parseFloat(svgHeight) - 5; // Position unter dem Barcode
+            
+            const transformValue = "translate(" + textX + ", " + textY + ") rotate(180)";
+            textElement.setAttribute("transform", transformValue);
+            textElement.setAttribute("x", "0");
+            textElement.setAttribute("y", "0");
+            textElement.setAttribute("text-anchor", "middle");
+            textElement.setAttribute("dominant-baseline", "middle");
+          }
+        }
+      }, 100);
 
       autoShrinkNames();
     });
