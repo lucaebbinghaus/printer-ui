@@ -193,13 +193,26 @@ fi
 if [[ "$NEED_USER_SYSTEMD" == "1" ]]; then
   log "[6/10] Updating user systemd unit (Electron)"
   USER_UNIT_DIR="/home/$APP_USER/.config/systemd/user"
-  sudo mkdir -p "$USER_UNIT_DIR"
-
-  sed "s/@APP_USER@/$APP_USER_ESCAPED/g" \
-    systemd/user/printer-ui-electron.service.in \
-    | sudo tee "$USER_UNIT_DIR/printer-ui-electron.service" >/dev/null
-
-  sudo chown -R "$APP_USER:$APP_USER" "/home/$APP_USER/.config"
+  
+  # Check if we're already running as the target user
+  CURRENT_USER="$(whoami)"
+  if [[ "$CURRENT_USER" == "$APP_USER" ]]; then
+    # Already running as the user - no sudo needed
+    mkdir -p "$USER_UNIT_DIR"
+    sed "s/@APP_USER@/$APP_USER_ESCAPED/g" \
+      systemd/user/printer-ui-electron.service.in \
+      > "$USER_UNIT_DIR/printer-ui-electron.service"
+  else
+    # Running as different user - use sudo -u (may require password, but better than direct sudo)
+    sudo -u "$APP_USER" mkdir -p "$USER_UNIT_DIR" 2>/dev/null || {
+      # Fallback: if directory doesn't exist and user can't create it, use sudo
+      sudo mkdir -p "$USER_UNIT_DIR"
+      sudo chown -R "$APP_USER:$APP_USER" "$USER_UNIT_DIR"
+    }
+    sed "s/@APP_USER@/$APP_USER_ESCAPED/g" \
+      systemd/user/printer-ui-electron.service.in \
+      | sudo -u "$APP_USER" tee "$USER_UNIT_DIR/printer-ui-electron.service" >/dev/null
+  fi
 else
   log "[6/10] User systemd not changed"
 fi
