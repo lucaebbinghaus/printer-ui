@@ -3,7 +3,7 @@
 // Format date without leading zeros (e.g., "1.12.2025" instead of "01.12.2025")
 function formatDateWithoutLeadingZeros(dateString: string): string {
   if (!dateString) return dateString;
-  
+
   try {
     // Try to parse the date string (could be "01.12.2025" or already formatted)
     const parts = dateString.split(".");
@@ -30,11 +30,11 @@ function formatDateWithoutLeadingZeros(dateString: string): string {
 
 export function buildLabelHtml(opts: {
   name: string;
-  artNumber: string;         // aktuell unbenutzt im Layout, aber noch im Typ
+  artNumber: string; // aktuell unbenutzt im Layout, aber noch im Typ
   weight: string;
   mhd: string;
-  ingredientsHtml: string;   // Richtext/Zutaten
-  barcodeData: string;       // EAN/GS1-128 String
+  ingredientsHtml: string; // Richtext/Zutaten
+  barcodeData: string; // EAN/GS1-128 String
   description: string;
   dietTypeSvg?: string;
 }) {
@@ -48,7 +48,7 @@ export function buildLabelHtml(opts: {
     description,
     dietTypeSvg,
   } = opts;
-  
+
   // Format MHD date without leading zeros
   const formattedMhd = formatDateWithoutLeadingZeros(mhd);
 
@@ -187,26 +187,29 @@ export function buildLabelHtml(opts: {
     white-space: normal; /* wrap erlauben */
   }
 
+  /* Container für Barcode + Text vertikal */
   .rotated-footer-barcode {
-    width: 250px;
-    height: 90px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: flex-start;
+    gap: 8px;
   }
 
   .rotated-footer-barcode svg {
     display: block;
+    width: auto;
+    height: 70px;
   }
 
-  /* Barcode text styling - über dem Barcode, um 180 Grad gedreht */
-  .rotated-footer-barcode text {
+  /* Text unter dem Barcode */
+  .barcode-plain-text {
     font-family: "Open Sans", Arial, sans-serif;
     font-size: 16px;
-    font-weight: normal;
+    line-height: 1;
+    text-align: center;
+    white-space: nowrap;
     transform: rotate(180deg);
-    transform-origin: center;
   }
   </style>
 
@@ -256,10 +259,17 @@ export function buildLabelHtml(opts: {
       </div>
     </div>
 
-    <!-- GEDREHTER FOOTER MIT NAME + BARCODE -->
+    <!-- GEDREHTER FOOTER MIT BARCODE + KLARTEXT DARUNTER + NAME -->
     <div class="rotated-footer">
+      
       <div class="name name-footer">${name}</div>
-      <svg id="barcode-rotated" class="rotated-footer-barcode"></svg>
+
+      <div class="rotated-footer-barcode">
+        <div id="barcode-rotated-text" class="barcode-plain-text"></div>
+        <svg id="barcode-rotated"></svg>
+        
+      </div>
+
     </div>
 
   </div>
@@ -268,38 +278,21 @@ export function buildLabelHtml(opts: {
     document.addEventListener("DOMContentLoaded", function () {
       const gs1Data = ${barcodeJsLiteral};
 
+      // Barcode rendern (ohne eingebauten Text von JsBarcode)
       JsBarcode("#barcode-rotated", gs1Data, {
         format: "CODE128",
         ean128: true,
-        displayValue: true,
-        fontSize: 16,
-        textPosition: "bottom",
-        textMargin: 8,
+        displayValue: false,
         width: 3,
         height: 70,
         margin: 0
       });
 
-      // Text um 180 Grad drehen und nach unten verschieben (da Footer bereits gedreht ist)
-      setTimeout(() => {
-        const textElement = document.querySelector("#barcode-rotated text");
-        if (textElement) {
-          const svg = document.querySelector("#barcode-rotated svg");
-          if (svg) {
-            const svgWidth = svg.getAttribute("width") || "250";
-            const svgHeight = svg.getAttribute("height") || "90";
-            const textX = parseFloat(svgWidth) / 2;
-            const textY = parseFloat(svgHeight) - 5; // Position unter dem Barcode
-            
-            const transformValue = "translate(" + textX + ", " + textY + ") rotate(180)";
-            textElement.setAttribute("transform", transformValue);
-            textElement.setAttribute("x", "0");
-            textElement.setAttribute("y", "0");
-            textElement.setAttribute("text-anchor", "middle");
-            textElement.setAttribute("dominant-baseline", "middle");
-          }
-        }
-      }, 100);
+      // Klartext unter dem Barcode anzeigen
+      const textEl = document.getElementById("barcode-rotated-text");
+      if (textEl) {
+        textEl.textContent = gs1Data;
+      }
 
       autoShrinkNames();
     });
@@ -319,7 +312,6 @@ export function buildLabelHtml(opts: {
         }
       });
     }
-
   </script>
 </body>
 </html>`;
