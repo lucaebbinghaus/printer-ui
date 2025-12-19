@@ -209,11 +209,8 @@ if [[ "$NEED_HOST_NPM" == "1" ]]; then
   log "[7/10] Host npm install (for Electron)"
   sudo -u "$APP_USER" npm install
 
-  log "[7/10] Fix Electron chrome-sandbox permissions"
-  if [[ -f "$PROJECT_DIR/node_modules/electron/dist/chrome-sandbox" ]]; then
-    sudo chown root:root "$PROJECT_DIR/node_modules/electron/dist/chrome-sandbox"
-    sudo chmod 4755 "$PROJECT_DIR/node_modules/electron/dist/chrome-sandbox"
-  fi
+  # Note: We disable Electron sandbox via ELECTRON_DISABLE_SANDBOX=1
+  # instead of setting chrome-sandbox permissions (which requires sudo)
 else
   log "[7/10] Host npm install not needed"
 fi

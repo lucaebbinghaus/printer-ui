@@ -4,12 +4,14 @@ const { exec } = require("child_process");
 
 let mainWindow;
 
+// Disable Electron sandbox to prevent sudo password prompts
+// This is safe for kiosk/embedded applications
+process.env.ELECTRON_DISABLE_SANDBOX = "1";
+
 // Wayland compatibility fixes
 if (process.env.XDG_SESSION_TYPE === "wayland") {
   // Disable GPU acceleration on Wayland to prevent crashes
   app.disableHardwareAcceleration();
-  // Use XWayland if available
-  process.env.ELECTRON_DISABLE_SANDBOX = "1";
 }
 
 // Prevent Electron from being garbage collected
@@ -31,6 +33,7 @@ function createWindow() {
       preload: path.join(__dirname, "preload.js"),
       nodeIntegration: false,
       contextIsolation: true,
+      sandbox: false, // Disable sandbox to prevent sudo password prompts
       // Disable background throttling to prevent resource cleanup issues
       backgroundThrottling: false,
     },

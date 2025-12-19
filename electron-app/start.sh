@@ -3,6 +3,8 @@ set -e
 
 export DISPLAY=${DISPLAY:-:0}
 export KIOSK_URL=${KIOSK_URL:-http://localhost:3000}
+# Disable Electron sandbox to prevent sudo password prompts
+export ELECTRON_DISABLE_SANDBOX=1
 
 # warten bis Backend erreichbar (max 60s)
 for i in {1..60}; do

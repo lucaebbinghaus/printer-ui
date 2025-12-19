@@ -15,6 +15,9 @@ Environment=DISPLAY=:0
 # Ziel-URL für den Kiosk
 Environment=KIOSK_URL=http://localhost:3000
 
+# Disable Electron sandbox to prevent sudo password prompts
+Environment=ELECTRON_DISABLE_SANDBOX=1
+
 # Electron starten
 ExecStart=/opt/printer-ui/electron-app/start.sh
 
