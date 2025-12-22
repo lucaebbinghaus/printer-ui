@@ -24,10 +24,18 @@ export interface XanoIngredient {
   ADDON_additive_function_class?: XanoAdditiveClass;
 }
 
+export interface XanoSubcomponent {
+  id: number;
+  name: string;
+  component_ingredient_ids: XanoIngredient[];
+  subcomponents?: XanoSubcomponent[]; // Rekursive Struktur für verschachtelte Subkomponenten
+}
+
 export interface XanoComponent {
   id: number;
   name: string;
   component_ingredient_ids: XanoIngredient[];
+  subcomponents?: XanoSubcomponent[]; // Subkomponenten können auch Zutaten haben
 }
 
 export interface XanoProduct {
@@ -61,10 +69,30 @@ export function buildIngredientsFromProduct(product: XanoProduct): {
 
   const collected: XanoIngredient[] = [];
 
-  // 1) Zutaten einsammeln
+  // Hilfsfunktion: Rekursiv alle Zutaten aus Subkomponenten sammeln
+  function collectIngredientsFromSubcomponents(subcomponents: XanoSubcomponent[] | undefined) {
+    if (!subcomponents) return;
+    for (const subcomp of subcomponents) {
+      // Zutaten der Subkomponente sammeln
+      for (const ing of subcomp.component_ingredient_ids || []) {
+        collected.push(ing);
+      }
+      // Rekursiv verschachtelte Subkomponenten durchlaufen
+      if (subcomp.subcomponents) {
+        collectIngredientsFromSubcomponents(subcomp.subcomponents);
+      }
+    }
+  }
+
+  // 1) Zutaten einsammeln (Komponenten + Subkomponenten)
   for (const comp of product.printer_components_ids || []) {
+    // Direkte Zutaten der Komponente
     for (const ing of comp.component_ingredient_ids || []) {
       collected.push(ing);
+    }
+    // Zutaten aus Subkomponenten
+    if (comp.subcomponents) {
+      collectIngredientsFromSubcomponents(comp.subcomponents);
     }
   }
 
