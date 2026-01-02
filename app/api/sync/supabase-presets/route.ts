@@ -23,6 +23,7 @@ type SupabaseProduct = {
   sku: string;
   weight_g: number;
   shelf_life_days: number;
+  color_hex?: string | null;
   dietTypeSvg: string | null;
   ingredientsHtml: string; // Already formatted HTML
 };
@@ -113,6 +114,7 @@ function transformSupabaseProduct(
     art_number: supabaseProduct.sku,
     mhd: supabaseProduct.shelf_life_days || 0,
     description: supabaseProduct.description || undefined,
+    color_hex: supabaseProduct.color_hex || undefined,
     dietTypeSvg: supabaseProduct.dietTypeSvg || undefined,
     // Store ingredientsHtml directly - already formatted
     ingredientsHtml: supabaseProduct.ingredientsHtml || "",
