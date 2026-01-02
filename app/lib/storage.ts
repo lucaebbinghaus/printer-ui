@@ -210,6 +210,39 @@ function migrateConfig(raw: any): AppConfig {
     },
   };
 
+  // Update Supabase config if values match old defaults or are empty
+  // This ensures API keys and endpoints get updated when defaults change after updates
+  const currentSupabase = cfg.sync.supabase;
+  const defaultSupabase = DEFAULT_CONFIG.sync.supabase;
+
+  // List of old default values that should be updated
+  const oldApiKeys = [
+    "sb_publishable_oujgdQhrn4KTaxBYQS1i9Q_a5fcSQj1", // Old default
+  ];
+  const oldEndpointUrls: string[] = [
+    // Add old endpoint URLs here if they change in the future
+  ];
+
+  // Update endpointUrl if it's empty or matches an old default
+  if (
+    !currentSupabase.endpointUrl ||
+    currentSupabase.endpointUrl.trim() === "" ||
+    oldEndpointUrls.includes(currentSupabase.endpointUrl.trim())
+  ) {
+    console.log("[migrateConfig] Updating Supabase endpointUrl to new default");
+    cfg.sync.supabase.endpointUrl = defaultSupabase.endpointUrl;
+  }
+
+  // Update apiKey if it's empty or matches an old default
+  if (
+    !currentSupabase.apiKey ||
+    currentSupabase.apiKey.trim() === "" ||
+    oldApiKeys.includes(currentSupabase.apiKey.trim())
+  ) {
+    console.log("[migrateConfig] Updating Supabase apiKey to new default");
+    cfg.sync.supabase.apiKey = defaultSupabase.apiKey;
+  }
+
   // Migration: wenn es noch ein altes printer.defaultLabelQty gibt,
   // dieses nach general.defaultLabelQty übernehmen (falls general leer).
   const legacyQty = raw?.printer?.defaultLabelQty;
