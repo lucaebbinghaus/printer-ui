@@ -9,6 +9,8 @@ import {
   Info,
   ToggleLeft,
   ToggleRight,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 
 type SupabaseSettings = {
@@ -28,6 +30,7 @@ export default function SettingsPage() {
   const [enabled, setEnabled] = useState(true);
   const [endpointUrl, setEndpointUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
+  const [showApiKey, setShowApiKey] = useState(false);
 
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
 
@@ -200,18 +203,32 @@ export default function SettingsPage() {
           <label className="block text-sm font-medium mb-1 text-gray-700">
             API Key
           </label>
-          <input
-            type="password"
-            value={apiKey}
-            onChange={(e) => {
-              setApiKey(e.target.value);
-              setSuccess(null);
-              setError(null);
-              setSyncResult(null);
-            }}
-            className="w-full border border-gray-200 px-3 py-2 rounded-lg bg-white text-sm"
-            placeholder="sb_publishable_..."
-          />
+          <div className="relative">
+            <input
+              type={showApiKey ? "text" : "password"}
+              value={apiKey}
+              onChange={(e) => {
+                setApiKey(e.target.value);
+                setSuccess(null);
+                setError(null);
+                setSyncResult(null);
+              }}
+              className="w-full border border-gray-200 px-3 py-2 pr-10 rounded-lg bg-white text-sm"
+              placeholder="sb_publishable_..."
+            />
+            <button
+              type="button"
+              onClick={() => setShowApiKey((v) => !v)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-gray-500 hover:text-gray-700 rounded hover:bg-gray-100 transition-colors"
+              aria-label={showApiKey ? "API Key verbergen" : "API Key anzeigen"}
+            >
+              {showApiKey ? (
+                <EyeOff className="w-4 h-4" />
+              ) : (
+                <Eye className="w-4 h-4" />
+              )}
+            </button>
+          </div>
           <p className="mt-1 text-xs text-gray-500">
             Supabase publishable API Key.
           </p>
