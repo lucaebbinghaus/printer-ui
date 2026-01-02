@@ -126,15 +126,36 @@ export async function POST(req: Request) {
 
     let ingredientsHtml = html;
 
+    // Für zusätzliche Felder casten wir auf any,
+    // weil sie nicht im minimalen XanoProduct-Typ stehen.
+    const productAny = product as any;
+
     // Wenn ein Produkt mit Komponenten/Ingredients übergeben wurde,
     // alles serverseitig berechnen.
-    if (product && Array.isArray(product.printer_components_ids)) {
-      const res = buildIngredientsFromProduct(product);
-      ingredientsHtml = res.ingredientsHtml;
-
-      // Für zusätzliche Felder casten wir auf any,
-      // weil sie nicht im minimalen XanoProduct-Typ stehen.
-      const productAny = product as any;
+    if (product) {
+      // Check for Supabase product format (has ingredientsHtml directly)
+      if (productAny.ingredientsHtml !== undefined && productAny.ingredientsHtml !== null) {
+        // Supabase format - ingredientsHtml is already formatted
+        ingredientsHtml = productAny.ingredientsHtml;
+        logInfo("Using Supabase ingredientsHtml", "PRINT", {
+          hasIngredientsHtml: !!productAny.ingredientsHtml,
+          length: productAny.ingredientsHtml?.length || 0,
+          preview: productAny.ingredientsHtml?.substring(0, 100) || "",
+        });
+      } else if (Array.isArray(product.printer_components_ids) && product.printer_components_ids.length > 0) {
+        // Xano format - build from components
+        const res = buildIngredientsFromProduct(product);
+        ingredientsHtml = res.ingredientsHtml;
+        logInfo("Built ingredientsHtml from Xano components", "PRINT", {
+          componentsCount: product.printer_components_ids.length,
+        });
+      } else {
+        logInfo("No ingredientsHtml found in product", "PRINT", {
+          hasIngredientsHtml: !!productAny.ingredientsHtml,
+          hasComponents: Array.isArray(product.printer_components_ids) && product.printer_components_ids.length > 0,
+          productKeys: Object.keys(productAny),
+        });
+      }
 
       if (!name) name = product.name;
 
@@ -150,8 +171,13 @@ export async function POST(req: Request) {
         description = productAny.description;
       }
 
-      if (!dietTypeSvg && productAny._addon_printer_product_diet_type?.svg) {
-        dietTypeSvg = productAny._addon_printer_product_diet_type.svg;
+      if (!dietTypeSvg) {
+        // Check for dietTypeSvg directly on product (Supabase format)
+        if (productAny.dietTypeSvg) {
+          dietTypeSvg = productAny.dietTypeSvg;
+        } else if (productAny._addon_printer_product_diet_type?.svg) {
+          dietTypeSvg = productAny._addon_printer_product_diet_type.svg;
+        }
       }
 
       if (!mhd && productAny.mhd !== undefined && productAny.mhd !== null) {

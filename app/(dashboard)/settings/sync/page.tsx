@@ -7,17 +7,13 @@ import {
   Download,
   RefreshCcw,
   Info,
-  Link2,
   ToggleLeft,
   ToggleRight,
 } from "lucide-react";
 
-type XanoSettings = {
+type SupabaseSettings = {
   enabled: boolean;
-  baseUrl: string;
-  productsEndpoint: string;
-  intervalMinutes: number;
-  printerId: string;
+  endpointUrl: string;
   apiKey: string;
   lastSyncAt: string | null;
 };
@@ -30,10 +26,7 @@ export default function SettingsPage() {
   const [syncing, setSyncing] = useState(false);
 
   const [enabled, setEnabled] = useState(true);
-  const [baseUrl, setBaseUrl] = useState("");
-  const [productsEndpoint, setProductsEndpoint] = useState("/printer_products");
-  const [intervalMinutes, setIntervalMinutes] = useState(60);
-  const [printerId, setPrinterId] = useState("");
+  const [endpointUrl, setEndpointUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
 
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
@@ -49,19 +42,16 @@ export default function SettingsPage() {
     setSyncResult(null);
 
     try {
-      const res = await fetch("/api/settings/xano", { cache: "no-store" });
+      const res = await fetch("/api/settings/supabase", { cache: "no-store" });
       if (!res.ok) throw new Error();
-      const json: XanoSettings = await res.json();
+      const json: SupabaseSettings = await res.json();
 
       setEnabled(Boolean(json.enabled));
-      setBaseUrl(json.baseUrl || "");
-      setProductsEndpoint(json.productsEndpoint || "/printer_products");
-      setIntervalMinutes(Number(json.intervalMinutes ?? 60));
-      setPrinterId(json.printerId || "");
+      setEndpointUrl(json.endpointUrl || "");
       setApiKey(json.apiKey || "");
       setLastSyncAt(json.lastSyncAt ?? null);
     } catch {
-      setError("Fehler beim Laden der Xano-Einstellungen.");
+      setError("Fehler beim Laden der Supabase-Einstellungen.");
     } finally {
       setLoading(false);
     }
@@ -78,15 +68,12 @@ export default function SettingsPage() {
     setSyncResult(null);
 
     try {
-      const res = await fetch("/api/settings/xano", {
+      const res = await fetch("/api/settings/supabase", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           enabled,
-          baseUrl: baseUrl.trim(),
-          productsEndpoint: productsEndpoint.trim(),
-          intervalMinutes: Number(intervalMinutes),
-          printerId: printerId.trim(),
+          endpointUrl: endpointUrl.trim(),
           apiKey: apiKey.trim(),
         }),
       });
@@ -96,7 +83,7 @@ export default function SettingsPage() {
         throw new Error(msg);
       }
 
-      setSuccess("Xano-Einstellungen gespeichert.");
+      setSuccess("Supabase-Einstellungen gespeichert.");
       await load();
 
       router.refresh();
@@ -114,19 +101,19 @@ export default function SettingsPage() {
     setSuccess(null);
 
     try {
-      const res = await fetch("/api/sync/xano-products", { method: "POST" });
+      const res = await fetch("/api/sync/supabase-presets", { method: "POST" });
       if (!res.ok) {
         const msg = await res.text().catch(() => "");
         throw new Error(msg);
       }
 
       const json = await res.json();
-      setSyncResult(`Produkte abgerufen: ${json.count} Einträge.`);
+      setSyncResult(`Presets abgerufen: ${json.count} Einträge.`);
 
       await load();
       router.refresh();
     } catch (e: any) {
-      setError(e?.message || "Produkt-Sync fehlgeschlagen.");
+      setError(e?.message || "Preset-Sync fehlgeschlagen.");
     } finally {
       setSyncing(false);
     }
@@ -148,7 +135,7 @@ export default function SettingsPage() {
 
       <div className="flex items-start gap-2 p-3 bg-blue-50 text-blue-900 rounded-lg border border-blue-200 text-sm">
         <Info className="w-4 h-4 mt-0.5" />
-        <p>Hier konfigurierst du den Xano-Sync. Printer ID ist dein auth_token.</p>
+        <p>Hier konfigurierst du den Supabase-Sync für Presets und Produkte.</p>
       </div>
 
       <section className="p-5 bg-white border border-gray-200 rounded-xl shadow-sm space-y-4">
@@ -156,7 +143,7 @@ export default function SettingsPage() {
         <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
           <div>
             <div className="text-sm font-medium text-gray-800">
-              Xano Sync aktiv
+              Supabase Sync aktiv
             </div>
             <div className="text-xs text-gray-500">
               Wenn deaktiviert, wird kein Produktabruf durchgeführt.
@@ -170,7 +157,7 @@ export default function SettingsPage() {
               setSyncResult(null);
             }}
             className="inline-flex items-center gap-2 rounded-lg bg-white border border-gray-200 px-3 py-2 text-sm shadow-sm hover:bg-gray-50"
-            aria-label="Toggle Xano sync"
+            aria-label="Toggle Supabase sync"
           >
             {enabled ? (
               <>
@@ -186,70 +173,48 @@ export default function SettingsPage() {
           </button>
         </div>
 
-        {/* Base URL */}
+        {/* Endpoint URL */}
         <div>
           <label className="block text-sm font-medium mb-1 text-gray-700">
-            Xano Base URL
+            Supabase Endpoint URL
           </label>
           <input
             type="text"
-            value={baseUrl}
+            value={endpointUrl}
             onChange={(e) => {
-              setBaseUrl(e.target.value);
+              setEndpointUrl(e.target.value);
               setSuccess(null);
               setError(null);
               setSyncResult(null);
             }}
             className="w-full border border-gray-200 px-3 py-2 rounded-lg bg-white text-sm"
-            placeholder="https://api.saf-tepasse.de/api:..."
+            placeholder="https://kzwiyvrkklajghuiwngj.supabase.co/functions/v1/get-printer-preset-payload"
           />
           <p className="mt-1 text-xs text-gray-500">
-            Beispiel: https://api.saf-tepasse.de/api:j-HmV1Vn
+            Vollständige URL zur Supabase Edge Function.
           </p>
         </div>
 
-        {/* Endpoint */}
+        {/* API Key */}
         <div>
           <label className="block text-sm font-medium mb-1 text-gray-700">
-            Endpunkt
+            API Key
           </label>
           <input
-            type="text"
-            value={productsEndpoint}
+            type="password"
+            value={apiKey}
             onChange={(e) => {
-              setProductsEndpoint(e.target.value);
+              setApiKey(e.target.value);
               setSuccess(null);
               setError(null);
               setSyncResult(null);
             }}
             className="w-full border border-gray-200 px-3 py-2 rounded-lg bg-white text-sm"
-            placeholder="/printer_products"
+            placeholder="sb_publishable_..."
           />
           <p className="mt-1 text-xs text-gray-500">
-            Wird an die Base URL gehängt.
+            Supabase publishable API Key.
           </p>
-        </div>
-
-        {/* Printer ID */}
-        <div>
-          <label className="block text-sm font-medium mb-1 text-gray-700">
-            Printer ID
-          </label>
-          <div className="flex items-center gap-2 border border-gray-200 px-3 py-2 rounded-lg bg-white">
-            <Link2 className="w-4 h-4 text-gray-500" />
-            <input
-              type="text"
-              value={printerId}
-              onChange={(e) => {
-                setPrinterId(e.target.value);
-                setSuccess(null);
-                setError(null);
-                setSyncResult(null);
-              }}
-              className="w-full bg-transparent text-sm outline-none"
-              placeholder="He1NDNzs4nWQC2uS86KC1CXaOxMtx2..."
-            />
-          </div>
         </div>
 
         {/* Buttons */}
@@ -269,7 +234,7 @@ export default function SettingsPage() {
             className="inline-flex items-center gap-2 bg-white border border-gray-200 px-4 py-2 rounded-lg text-sm font-medium shadow-sm hover:bg-gray-50 active:scale-[0.98] disabled:opacity-60"
           >
             <Download className="w-4 h-4" />
-            {syncing ? "Abrufen..." : "Produkte abrufen"}
+            {syncing ? "Abrufen..." : "Presets abrufen"}
           </button>
         </div>
 

@@ -150,7 +150,7 @@ export default function SettingsPage() {
     setSuccess(null);
 
     try {
-      const res = await fetch("/api/sync/xano-products", {
+      const res = await fetch("/api/sync/supabase-presets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });

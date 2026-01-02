@@ -56,7 +56,7 @@ export default function ButtonGrid({ buttons }: { buttons: PrinterProduct[] }) {
         mhd_days: mhdDays,
         mhd: mhdDate,
         description: product.description ?? "",
-        dietTypeSvg: product?._addon_printer_product_diet_type?.svg ?? null,
+        dietTypeSvg: (product as any).dietTypeSvg ?? (product as any)?._addon_printer_product_diet_type?.svg ?? null,
         // WICHTIG: gesamtes Produkt mitsenden, inkl. Komponenten & Ingredients
         product,
       }),

@@ -41,9 +41,9 @@ export async function POST(req: Request) {
         ...(patch.ui || {}),
       },
       sync: {
-        xano: {
-          ...current.sync.xano,
-          ...(patch.sync?.xano || {}),
+        supabase: {
+          ...current.sync.supabase,
+          ...(patch.sync?.supabase || {}),
         },
       },
     };

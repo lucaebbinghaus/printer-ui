@@ -12,7 +12,8 @@ export default async function LabelsPresetPage({
   const presetIdNum = Number(presetId);
 
   const activePreset = presets.find((p) => p.id === presetIdNum);
-  const buttons = activePreset?.product_ids ?? [];
+  // Use products array if available, fallback to product_ids for backward compatibility
+  const buttons = activePreset?.products ?? activePreset?.product_ids ?? [];
 
   if (!activePreset) {
     return <div className="p-4">Preset nicht gefunden.</div>;

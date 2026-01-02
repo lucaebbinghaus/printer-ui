@@ -96,14 +96,11 @@ export type AppConfig = {
   };
 
   sync: {
-    xano: {
+    supabase: {
       enabled: boolean;
-      baseUrl: string;
+      endpointUrl: string; // Full URL to Supabase Edge Function
       apiKey: string;
-      productsEndpoint: string;
-      intervalMinutes: number;
       lastSyncAt: string | null;
-      printerId: string; // auth token = printerId
 
       // OPTIONAL (für "nur schreiben wenn geändert")
       lastSyncChanged?: boolean;
@@ -149,14 +146,11 @@ const DEFAULT_CONFIG: AppConfig = {
   },
 
   sync: {
-    xano: {
-      enabled: false,
-      baseUrl: "https://api.saf-tepasse.de/api:j-HmV1Vn",
-      apiKey: "",
-      productsEndpoint: "/printer/printer_products",
-      intervalMinutes: 60,
+    supabase: {
+      enabled: true,
+      endpointUrl: "https://kzwiyvrkklajghuiwngj.supabase.co/functions/v1/get-printer-preset-payload",
+      apiKey: "sb_publishable_i58QW02ahpdocn0MRC5yew_kNkKkWs6",
       lastSyncAt: null,
-      printerId: "He1NDNzs4nWQC2uS86KC1CXaOxMtx2",
       lastSyncChanged: false,
     },
   },
@@ -196,9 +190,18 @@ function migrateConfig(raw: any): AppConfig {
       ...(raw.ui || {}),
     },
     sync: {
-      xano: {
-        ...DEFAULT_CONFIG.sync.xano,
-        ...(raw.sync?.xano || {}),
+      supabase: {
+        ...DEFAULT_CONFIG.sync.supabase,
+        ...(raw.sync?.supabase || {}),
+        // Migration: if old xano config exists, try to migrate
+        ...(raw.sync?.xano && !raw.sync?.supabase ? {
+          enabled: raw.sync.xano.enabled ?? DEFAULT_CONFIG.sync.supabase.enabled,
+          endpointUrl: raw.sync.xano.baseUrl && raw.sync.xano.productsEndpoint
+            ? `${raw.sync.xano.baseUrl}${raw.sync.xano.productsEndpoint}`
+            : DEFAULT_CONFIG.sync.supabase.endpointUrl,
+          apiKey: raw.sync.xano.apiKey || DEFAULT_CONFIG.sync.supabase.apiKey,
+          lastSyncAt: raw.sync.xano.lastSyncAt || null,
+        } : {}),
       },
     },
     products: {
@@ -246,7 +249,7 @@ export type ProductsFile<T> = {
   version: number;
   items: T[];
   meta: {
-    source: "local" | "xano";
+    source: "local" | "xano" | "supabase";
     lastUpdatedAt: string;
   };
 };
